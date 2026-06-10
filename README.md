@@ -1,30 +1,64 @@
-# Cab Booking Frontend (React + Vite)
+# QuickCab - Cab Booking System
 
-## How to run in VS Code
-1. Make sure the Spring Boot backend is running on `http://localhost:8080`.
-2. Open this folder in VS Code, then in the terminal:
-
-```
-npm install
-npm run dev
-```
-
-3. Open `http://localhost:5173` in your browser.
-
-## Project structure
-- `src/api/api.js` – Axios instance pointing to backend
-- `src/App.jsx` – routes + navbar
-- `src/pages/` – one file per page (Login, Register, BookRide, RideStatus, DriverDashboard, History, Profile, Home)
-- `src/styles.css` – simple white + yellow theme (Rapido-inspired)
+QuickCab is a full-stack cab booking application developed using React, Spring Boot, and MySQL. The platform allows users to book rides, track ride status, communicate with drivers, and manage ride history through a simple and responsive interface.
 
 ## Features
-- User & Driver register / login / update / delete
-- Book ride with past pickup/drop suggestions (HTML5 datalist)
-- Choose vehicle (car / bike / auto)
-- Driver accepts/denies requests
-- Status flow: PENDING → ACCEPTED → ON_THE_WAY → ARRIVED → (OTP) → STARTED → (payment) → COMPLETED
-- 4-digit OTP shown to user, entered by driver
-- Live chat between user & driver (polled every 3s)
-- Driver details + rating shown to user
-- User rates driver after ride completes
-- Ride history for both
+
+* User and Driver Registration & Login
+* Ride Booking with Pickup and Drop Locations
+* Vehicle Selection (Car, Bike, Auto)
+* Driver Ride Request Management
+* Real-Time Ride Status Tracking
+* OTP-Based Ride Verification
+* Live Chat Between User and Driver
+* Driver Rating and Feedback System
+* Ride History for Users and Drivers
+
+## Tech Stack
+
+### Frontend
+
+* React
+* JavaScript
+* Vite
+* Axios
+* HTML
+* CSS
+
+### Backend
+
+* Spring Boot
+* Java
+* REST APIs
+* Hibernate / JPA
+
+### Database
+
+* MySQL
+
+## Project Workflow
+
+1. User registers and logs in.
+2. User books a ride by entering pickup and drop locations.
+3. Driver receives and accepts the ride request.
+4. User tracks ride progress through different ride stages.
+5. OTP verification is used before ride start.
+6. User completes payment and rates the driver.
+7. Ride details are stored in ride history.
+
+## How to Run
+
+### Frontend
+
+npm install
+npm run dev
+
+### Backend
+
+Run the Spring Boot application and ensure it is available on:
+http://localhost:8080
+
+Frontend runs on:
+http://localhost:5173
+
+http://localhost:5173
