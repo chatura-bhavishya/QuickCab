@@ -51,6 +51,7 @@ QuickCab is a full-stack cab booking application developed using React, Spring B
 ### Frontend
 
 npm install
+
 npm run dev
 
 ### Backend
