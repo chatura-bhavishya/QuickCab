@@ -5,7 +5,13 @@ import java.time.LocalDateTime;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "rides")
+// Indexes match the queries in RideRepository: history per rider/driver and the
+// pending list drivers poll.
+@Table(name = "rides", indexes = {
+        @Index(name = "idx_rides_user", columnList = "user_id"),
+        @Index(name = "idx_rides_driver", columnList = "driver_id"),
+        @Index(name = "idx_rides_status_vehicle", columnList = "status, vehicle_type")
+})
 public class Ride {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

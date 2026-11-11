@@ -7,7 +7,7 @@ import com.application.cabapp.security.Role;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "chat_messages")
+@Table(name = "chat_messages", indexes = @Index(name = "idx_chat_ride", columnList = "ride_id"))
 public class ChatMessage {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
