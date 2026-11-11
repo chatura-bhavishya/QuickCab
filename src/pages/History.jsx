@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import api from '../api/api';
-import { getDriver, getUser } from '../auth/session';
+import { getMyRides } from '../services/rideService';
+import { getDriver, getUser } from '../services/session';
 
 export default function History() {
   const [user] = useState(getUser);
@@ -9,10 +9,9 @@ export default function History() {
   const [err, setErr] = useState('');
 
   useEffect(() => {
-    const url = user ? `/rides/user/${user.id}` : driver ? `/rides/driver/${driver.id}` : null;
-    if (!url) return;
-    api.get(url)
-      .then(r => setRides(r.data))
+    if (!user && !driver) return;
+    getMyRides()
+      .then(setRides)
       .catch(() => setErr('Could not load your ride history. Please try again.'));
   }, [user, driver]);
 

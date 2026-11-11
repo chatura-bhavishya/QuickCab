@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import api from '../api/api';
-import { saveDriver } from '../auth/session';
-import { LIMITS } from '../constants';
+import { login } from '../services/authService';
+import { LIMITS, ROLES } from '../constants';
 
 export default function DriverLogin() {
   const [form, setForm] = useState({ username: '', password: '' });
@@ -15,8 +14,7 @@ export default function DriverLogin() {
     e.preventDefault();
     setErr('');
     try {
-      const res = await api.post('/drivers/login', form);
-      saveDriver(res.data);
+      await login(ROLES.DRIVER, form);
       navigate('/driver/dashboard');
     } catch {
       setErr('Invalid username or password');

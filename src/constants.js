@@ -1,8 +1,20 @@
 // Shared constants used across pages.
 
 export const STORAGE_KEYS = {
-  USER: 'user',
-  DRIVER: 'driver'
+  SESSION: 'quickcab.session',
+  // Keys used by older versions (no token); removed on startup.
+  LEGACY: ['user', 'driver']
+};
+
+// Account roles (must match backend Role.java).
+export const ROLES = {
+  USER: 'USER',
+  DRIVER: 'DRIVER'
+};
+
+export const LOGIN_PATHS = {
+  [ROLES.USER]: '/user/login',
+  [ROLES.DRIVER]: '/driver/login'
 };
 
 export const VEHICLES = [

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api/api';
-import { clearSession, getDriver, getUser, saveDriver, saveUser } from '../auth/session';
-import { DEFAULT_VEHICLE_TYPE, LIMITS, VEHICLES } from '../constants';
+import { deleteMyAccount, updateMyAccount } from '../services/accountService';
+import { getDriver, getUser } from '../services/session';
+import { DEFAULT_VEHICLE_TYPE, LIMITS, ROLES, VEHICLES } from '../constants';
 import { getErrorMessage } from '../utils/errors';
 import {
   firstError, validateContact, validateEmail, validatePassword,
@@ -24,7 +24,7 @@ export default function Profile() {
   if (!me) return <div className="card">Please login first.</div>;
 
   const handleChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
-  const accountUrl = isUser ? `/users/${me.id}` : `/drivers/${me.id}`;
+  const role = isUser ? ROLES.USER : ROLES.DRIVER;
 
   const update = async () => {
     setMsg(''); setErr('');
@@ -42,9 +42,8 @@ export default function Profile() {
 
     try {
       const payload = isUser ? form : { ...form, vehicleType: form.vehicleType || DEFAULT_VEHICLE_TYPE };
-      const res = await api.put(accountUrl, payload);
-      (isUser ? saveUser : saveDriver)(res.data);
-      setForm({ ...res.data, password: '' });
+      const updated = await updateMyAccount(role, payload);
+      setForm({ ...updated, password: '' });
       setMsg('Profile updated!');
     } catch (e) {
       setErr(getErrorMessage(e, 'Could not update profile. Please try again.'));
@@ -55,8 +54,7 @@ export default function Profile() {
     if (!window.confirm('Delete your account permanently?')) return;
     setMsg(''); setErr('');
     try {
-      await api.delete(accountUrl);
-      clearSession();
+      await deleteMyAccount(role);
       navigate('/');
     } catch {
       setErr('Could not delete account. Please try again.');

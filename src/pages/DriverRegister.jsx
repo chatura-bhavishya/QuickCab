@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import api from '../api/api';
-import { DEFAULT_VEHICLE_TYPE, LIMITS, REDIRECT_DELAY_MS, VEHICLES } from '../constants';
+import { register } from '../services/authService';
+import { DEFAULT_VEHICLE_TYPE, LIMITS, REDIRECT_DELAY_MS, ROLES, VEHICLES } from '../constants';
 import { getErrorMessage } from '../utils/errors';
 import {
   firstError, validateContact, validatePassword, validateUsername,
@@ -31,7 +31,7 @@ export default function DriverRegister() {
     if (validationError) { setErr(validationError); return; }
 
     try {
-      await api.post('/drivers/register', form);
+      await register(ROLES.DRIVER, form);
       setMsg('Registered! Redirecting to login...');
       setTimeout(() => navigate('/driver/login'), REDIRECT_DELAY_MS);
     } catch (e) {

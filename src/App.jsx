@@ -11,7 +11,8 @@ import DriverDashboard from './pages/DriverDashboard.jsx';
 import History from './pages/History.jsx';
 import Profile from './pages/Profile.jsx';
 import RequireAuth from './components/RequireAuth.jsx';
-import { clearSession, getDriver, getUser } from './auth/session';
+import { getDriver, getUser } from './services/session';
+import { logout as endSession } from './services/authService';
 
 function Navbar() {
   const navigate = useNavigate();
@@ -19,7 +20,7 @@ function Navbar() {
   const driver = getDriver();
 
   const logout = () => {
-    clearSession();
+    endSession();
     navigate('/');
   };
 

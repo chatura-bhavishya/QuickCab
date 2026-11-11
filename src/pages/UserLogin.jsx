@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import api from '../api/api';
-import { saveUser } from '../auth/session';
-import { LIMITS } from '../constants';
+import { login } from '../services/authService';
+import { LIMITS, ROLES } from '../constants';
 
 export default function UserLogin() {
   const [form, setForm] = useState({ username: '', password: '' });
@@ -15,8 +14,7 @@ export default function UserLogin() {
     e.preventDefault();
     setErr('');
     try {
-      const res = await api.post('/users/login', form);
-      saveUser(res.data);
+      await login(ROLES.USER, form);
       navigate('/book');
     } catch {
       setErr('Invalid username or password');

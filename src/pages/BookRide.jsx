@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../api/api';
-import { getUser } from '../auth/session';
+import { bookRide, getPastLocations } from '../services/rideService';
+import { getUser } from '../services/session';
 import { DEFAULT_VEHICLE_TYPE, LIMITS, VEHICLES } from '../constants';
 import { getErrorMessage } from '../utils/errors';
 import { firstError, validateLocation } from '../utils/validation';
@@ -20,8 +20,8 @@ export default function BookRide() {
   useEffect(() => {
     if (!user) { navigate('/user/login'); return; }
     // Past locations are only suggestions, so failures are ignored.
-    api.get(`/rides/locations/${user.id}`)
-      .then(res => { setPastPickups(res.data.pickups || []); setPastDrops(res.data.drops || []); })
+    getPastLocations()
+      .then(data => { setPastPickups(data.pickups || []); setPastDrops(data.drops || []); })
       .catch(() => {});
   }, [user, navigate]);
 
@@ -35,10 +35,8 @@ export default function BookRide() {
     if (validationError) { setErr(validationError); return; }
 
     try {
-      const res = await api.post('/rides/book', {
-        userId: user.id, pickup, drop, vehicleType
-      });
-      navigate(`/ride/${res.data.id}`);
+      const ride = await bookRide({ pickup, drop, vehicleType });
+      navigate(`/ride/${ride.id}`);
     } catch (e) {
       setErr(getErrorMessage(e, 'Could not book ride. Try again.'));
     }

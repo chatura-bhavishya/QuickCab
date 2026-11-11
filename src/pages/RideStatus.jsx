@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import api from '../api/api';
+import { cancelRide as cancelRideRequest, getRideDetails, rateDriver } from '../services/rideService';
+import { getMessages, sendMessage } from '../services/chatService';
 import { LIMITS, POLL_INTERVAL_MS, RATING_STARS, RIDE_STATUS } from '../constants';
 import { getErrorMessage } from '../utils/errors';
 import { validateChatMessage } from '../utils/validation';
@@ -24,9 +25,9 @@ export default function RideStatus() {
 
   const fetchRide = useCallback(async () => {
     try {
-      const res = await api.get(`/rides/${id}`);
-      setRide(res.data.ride);
-      setDriver(res.data.driver || null);
+      const details = await getRideDetails(id);
+      setRide(details.ride);
+      setDriver(details.driver || null);
       setLoadErr('');
     } catch {
       setLoadErr('Could not load this ride.');
@@ -35,8 +36,7 @@ export default function RideStatus() {
 
   const fetchChat = useCallback(async () => {
     try {
-      const res = await api.get(`/chat/${id}`);
-      setChat(res.data);
+      setChat(await getMessages(id));
     } catch {
       // Chat is refreshed on the next poll; keep the last messages shown.
     }
@@ -54,7 +54,7 @@ export default function RideStatus() {
     const validationError = validateChatMessage(msg);
     if (validationError) { setActionErr(validationError); return; }
     try {
-      await api.post('/chat/send', { rideId: Number(id), sender: 'USER', message: msg });
+      await sendMessage(id, msg);
       setMsg(''); fetchChat();
     } catch (e) {
       setActionErr(getErrorMessage(e, 'Message could not be sent.'));
@@ -65,7 +65,7 @@ export default function RideStatus() {
     setActionErr('');
     if (!rating) return;
     try {
-      await api.post(`/rides/${id}/rate`, { rating });
+      await rateDriver(id, rating);
       setRated(true);
     } catch {
       setActionErr('Could not submit rating. Please try again.');
@@ -76,7 +76,7 @@ export default function RideStatus() {
     setCancelErr('');
     if (!window.confirm('Are you sure you want to cancel this ride?')) return;
     try {
-      await api.post(`/rides/${id}/cancel`, { by: 'USER' });
+      await cancelRideRequest(id);
       fetchRide();
     } catch {
       setCancelErr('Could not cancel — the ride may have already started.');

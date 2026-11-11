@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import api from '../api/api';
-import { LIMITS, REDIRECT_DELAY_MS } from '../constants';
+import { register } from '../services/authService';
+import { LIMITS, REDIRECT_DELAY_MS, ROLES } from '../constants';
 import { getErrorMessage } from '../utils/errors';
 import {
   firstError, validateContact, validateEmail, validatePassword, validateUsername
@@ -27,7 +27,7 @@ export default function UserRegister() {
     if (validationError) { setErr(validationError); return; }
 
     try {
-      await api.post('/users/register', form);
+      await register(ROLES.USER, form);
       setMsg('Registered! Redirecting to login...');
       setTimeout(() => navigate('/user/login'), REDIRECT_DELAY_MS);
     } catch (e) {

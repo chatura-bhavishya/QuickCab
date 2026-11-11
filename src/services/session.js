@@ -1,35 +1,55 @@
-// Reads and writes the logged-in user / driver kept in localStorage.
-import { STORAGE_KEYS } from '../constants';
+// The logged-in session: { token, role, account, expiresAt } in localStorage.
+import { ROLES, STORAGE_KEYS } from '../constants';
 
-function read(key) {
-  let value;
+const MS_PER_SECOND = 1000;
+
+// Older versions stored the account (and even its password) without a token.
+STORAGE_KEYS.LEGACY.forEach(key => localStorage.removeItem(key));
+
+export function getSession() {
+  let session;
   try {
-    value = JSON.parse(localStorage.getItem(key) || 'null');
+    session = JSON.parse(localStorage.getItem(STORAGE_KEYS.SESSION) || 'null');
   } catch {
-    // Corrupted entry: drop it rather than crash the app.
-    localStorage.removeItem(key);
+    session = null;
+  }
+  if (!session?.token || !session.account || (session.expiresAt && Date.now() >= session.expiresAt)) {
+    if (session) clearSession(); // corrupted or expired
     return null;
   }
-  // Older versions of the app stored the plaintext password here; scrub it.
-  if (value && 'password' in value) {
-    delete value.password;
-    localStorage.setItem(key, JSON.stringify(value));
-  }
-  return value;
+  return session;
 }
 
-function write(key, account) {
-  // Never persist a password in the browser, even if the API returned one.
-  const { password, ...safe } = account || {};
-  localStorage.setItem(key, JSON.stringify(safe));
+/** Stores the login response ({ token, expiresInSeconds, account }) for the given role. */
+export function saveSession(role, { token, expiresInSeconds, account }) {
+  const session = {
+    token,
+    role,
+    account,
+    expiresAt: expiresInSeconds ? Date.now() + expiresInSeconds * MS_PER_SECOND : null
+  };
+  localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify(session));
 }
 
-export const getUser = () => read(STORAGE_KEYS.USER);
-export const getDriver = () => read(STORAGE_KEYS.DRIVER);
-export const saveUser = (user) => write(STORAGE_KEYS.USER, user);
-export const saveDriver = (driver) => write(STORAGE_KEYS.DRIVER, driver);
+/** Replaces the cached account details (e.g. after a profile update). */
+export function updateSessionAccount(account) {
+  const session = getSession();
+  if (session) localStorage.setItem(STORAGE_KEYS.SESSION, JSON.stringify({ ...session, account }));
+}
 
 export function clearSession() {
-  localStorage.removeItem(STORAGE_KEYS.USER);
-  localStorage.removeItem(STORAGE_KEYS.DRIVER);
+  localStorage.removeItem(STORAGE_KEYS.SESSION);
+}
+
+export const getToken = () => getSession()?.token || null;
+export const getRole = () => getSession()?.role || null;
+
+export function getUser() {
+  const session = getSession();
+  return session?.role === ROLES.USER ? session.account : null;
+}
+
+export function getDriver() {
+  const session = getSession();
+  return session?.role === ROLES.DRIVER ? session.account : null;
 }
