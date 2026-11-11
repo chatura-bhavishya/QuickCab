@@ -1,20 +1,27 @@
 package com.application.cabapp.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.persistence.*;
 
 @Entity
 @Table(name = "drivers")
 public class Driver {
+    public static final double DEFAULT_RATING = 5.0;
+
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(unique = true)
     private String username;
+
+    // BCrypt hash. Accepted in requests but never serialized into responses.
+    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     private String password;
     private String contact;
-    private String vehicleType; // car / bike / auto
+    private String vehicleType; // see VehicleType
     private String vehicleNumber;
-    private Double rating = 5.0;
+    private Double rating = DEFAULT_RATING;
     private Integer ratingCount = 0;
 
     public Long getId() { return id; }
