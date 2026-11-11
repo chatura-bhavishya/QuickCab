@@ -1,9 +1,10 @@
 /** Waiting ride requests for the driver's vehicle type. */
-export default function PendingRideList({ rides, onAccept, onDeny }) {
+export default function PendingRideList({ rides, loading, onAccept, onDeny }) {
   return (
     <div className="card">
       <h3>Pending Ride Requests</h3>
-      {rides.length === 0 && <p className="muted">No requests right now. Stay tuned!</p>}
+      {loading && <p className="muted" role="status">Loading ride requests...</p>}
+      {!loading && rides.length === 0 && <p className="muted">No requests right now. Stay tuned!</p>}
       {rides.map(r => (
         <div key={r.id} style={{ borderBottom: '1px solid #000', padding: '10px 0' }}>
           <p><b>Pickup:</b> {r.pickup}</p>

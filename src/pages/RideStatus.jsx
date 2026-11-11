@@ -61,7 +61,11 @@ export default function RideStatus() {
     }
   };
 
-  if (!ride) return <div className="card">{loadErr || 'Loading...'}</div>;
+  if (!ride) {
+    return loadErr
+      ? <div className="card error" role="alert">{loadErr}</div>
+      : <div className="card" role="status">Loading...</div>;
+  }
 
   const cancelledByUser = ride.status === RIDE_STATUS.CANCELLED_BY_USER;
   const cancelledByDriver = ride.status === RIDE_STATUS.CANCELLED_BY_DRIVER;
@@ -104,7 +108,7 @@ export default function RideStatus() {
         {RIDER_CANCELLABLE_STATUSES.includes(ride.status) && (
           <div style={{ marginTop: 12 }}>
             <button className="btn btn-danger" onClick={cancelRide}>Cancel Ride</button>
-            {cancelErr && <p style={{ color: '#b00', marginTop: 6 }}>{cancelErr}</p>}
+            {cancelErr && <p role="alert" style={{ color: '#b00', marginTop: 6 }}>{cancelErr}</p>}
           </div>
         )}
       </div>

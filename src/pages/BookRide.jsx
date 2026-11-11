@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import FormMessage from '../components/FormMessage';
 import VehiclePicker from '../components/forms/VehiclePicker';
 import { DEFAULT_VEHICLE_TYPE, LIMITS } from '../constants';
 import { bookRide, getPastLocations } from '../services/rideService';
@@ -14,6 +15,7 @@ export default function BookRide() {
   const [pastPickups, setPastPickups] = useState([]);
   const [pastDrops, setPastDrops] = useState([]);
   const [err, setErr] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     // Past locations are only autocomplete suggestions, so failures are ignored.
@@ -31,11 +33,13 @@ export default function BookRide() {
     );
     if (validationError) { setErr(validationError); return; }
 
+    setSubmitting(true);
     try {
       const ride = await bookRide({ pickup, drop, vehicleType });
       navigate(`/ride/${ride.id}`);
     } catch (e) {
       setErr(getErrorMessage(e, 'Could not book ride. Try again.'));
+      setSubmitting(false);
     }
   };
 
@@ -60,11 +64,11 @@ export default function BookRide() {
           </datalist>
         </div>
 
-        <label>Choose Vehicle</label>
-        <VehiclePicker value={vehicleType} onChange={setVehicleType} />
+        <label id="vehicle-label">Choose Vehicle</label>
+        <VehiclePicker value={vehicleType} onChange={setVehicleType} labelledBy="vehicle-label" />
 
-        <button className="btn btn-block">Book Ride</button>
-        {err && <div className="error">{err}</div>}
+        <button className="btn btn-block" disabled={submitting}>{submitting ? 'Booking...' : 'Book Ride'}</button>
+        <FormMessage error={err} />
       </form>
     </div>
   );

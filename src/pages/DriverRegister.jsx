@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import FormMessage from '../components/FormMessage';
 import FormField from '../components/forms/FormField';
 import VehicleSelect from '../components/forms/VehicleSelect';
 import { DEFAULT_VEHICLE_TYPE, LIMITS, REDIRECT_DELAY_MS, ROLES } from '../constants';
@@ -17,6 +18,7 @@ export default function DriverRegister() {
   });
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -31,12 +33,15 @@ export default function DriverRegister() {
     );
     if (validationError) { setErr(validationError); return; }
 
+    setSubmitting(true);
     try {
       await register(ROLES.DRIVER, form);
       setMsg('Registered! Redirecting to login...');
       setTimeout(() => navigate('/driver/login'), REDIRECT_DELAY_MS);
     } catch (e) {
       setErr(getErrorMessage(e, 'Registration failed'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -57,9 +62,8 @@ export default function DriverRegister() {
         </FormField>
         <FormField id="driver-reg-vehicle-number" label="Vehicle Number" name="vehicleNumber"
           value={form.vehicleNumber} onChange={handleChange} maxLength={LIMITS.VEHICLE_NUMBER_MAX} required />
-        <button className="btn btn-block">Register</button>
-        {err && <div className="error">{err}</div>}
-        {msg && <div className="success">{msg}</div>}
+        <button className="btn btn-block" disabled={submitting}>{submitting ? 'Registering...' : 'Register'}</button>
+        <FormMessage error={err} success={msg} />
       </form>
       <p className="muted" style={{ marginTop: 12 }}>
         Already a driver? <Link to="/driver/login">Login</Link>

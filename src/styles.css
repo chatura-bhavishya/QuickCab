@@ -152,7 +152,29 @@ tr:hover td { background: #f8fafc; }
 .success { color: var(--success); font-size: 14px; margin-top: 8px; font-weight: 600; }
 .muted { color: var(--muted); font-size: 14px; }
 
+/* Accessibility helpers */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+a:focus-visible, button:focus-visible, .vehicle-card:focus-visible, .stars:focus-visible {
+  outline: 3px solid var(--primary-light); outline-offset: 2px;
+}
+.btn:disabled { opacity: 0.65; cursor: not-allowed; transform: none; }
+
+/* Wide tables scroll sideways on small screens instead of overflowing the page */
+.table-wrap { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
 @media (max-width: 600px) {
   .hero h1 { font-size: 26px; }
   .vehicles { flex-direction: column; }
+
+  .navbar { flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+  .navbar .links { flex-wrap: wrap; gap: 12px; }
+  .container { margin: 16px auto; padding: 0 12px; }
+  .card { padding: 16px; }
+  .hero { padding: 40px 16px; }
+  .chat-msg { max-width: 90%; }
+  th, td { padding: 10px 8px; white-space: nowrap; }
+  input, select, textarea { font-size: 16px; } /* prevents iOS zoom on focus */
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import FormMessage from '../components/FormMessage';
 import FormField from '../components/forms/FormField';
 import { LIMITS, REDIRECT_DELAY_MS, ROLES } from '../constants';
 import { useForm } from '../hooks/useForm';
@@ -12,6 +13,7 @@ import {
 export default function UserRegister() {
   const { values: form, handleChange } = useForm({ username: '', email: '', password: '', contact: '' });
   const [msg, setMsg] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState('');
   const navigate = useNavigate();
 
@@ -26,12 +28,15 @@ export default function UserRegister() {
     );
     if (validationError) { setErr(validationError); return; }
 
+    setSubmitting(true);
     try {
       await register(ROLES.USER, form);
       setMsg('Registered! Redirecting to login...');
       setTimeout(() => navigate('/user/login'), REDIRECT_DELAY_MS);
     } catch (e) {
       setErr(getErrorMessage(e, 'Registration failed'));
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -47,9 +52,8 @@ export default function UserRegister() {
           onChange={handleChange} maxLength={LIMITS.PASSWORD_MAX} autoComplete="new-password" required />
         <FormField id="user-reg-contact" label="Contact Number" name="contact" type="tel" value={form.contact}
           onChange={handleChange} maxLength={LIMITS.CONTACT_MAX} autoComplete="tel" required />
-        <button className="btn btn-block">Register</button>
-        {err && <div className="error">{err}</div>}
-        {msg && <div className="success">{msg}</div>}
+        <button className="btn btn-block" disabled={submitting}>{submitting ? 'Registering...' : 'Register'}</button>
+        <FormMessage error={err} success={msg} />
       </form>
       <p className="muted" style={{ marginTop: 12 }}>
         Already have an account? <Link to="/user/login">Login</Link>

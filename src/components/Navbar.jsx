@@ -13,8 +13,8 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="navbar">
-      <Link to="/" className="logo">Quick<span>Cab</span></Link>
+    <nav className="navbar" aria-label="Main navigation">
+      <Link to="/" className="logo" aria-label="QuickCab home">Quick<span>Cab</span></Link>
       <div className="links">
         {!user && !driver && (
           <>

@@ -61,7 +61,7 @@ export default function ActiveRideCard({ ride, onSetStatus, onStart, onComplete,
           <button className="btn btn-danger" onClick={cancel}>Cancel Ride</button>
         </div>
       )}
-      {err && <p style={{ color: '#b00' }}>{err}</p>}
+      {err && <p role="alert" style={{ color: '#b00' }}>{err}</p>}
     </div>
   );
 }

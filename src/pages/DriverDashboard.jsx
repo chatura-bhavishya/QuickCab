@@ -18,6 +18,8 @@ export default function DriverDashboard() {
   const [activeRide, setActiveRide] = useState(null);
   const [chat, setChat] = useState([]);
   const [notice, setNotice] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   // The previously-active ride id, so we can notice when it disappears
   // (e.g. the rider cancelled it) and tell the driver.
   const [lastActiveId, setLastActiveId] = useState(null);
@@ -38,8 +40,12 @@ export default function DriverDashboard() {
       setActiveRide(active || null);
       setLastActiveId(active ? active.id : null);
       setChat(active ? await getMessages(active.id) : []);
+      setLoadError('');
     } catch {
-      // Transient network/API error: keep the current view, retry on next poll.
+      // Keep the current view and retry on the next poll.
+      setLoadError('Having trouble reaching the server. Retrying...');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -89,14 +95,15 @@ export default function DriverDashboard() {
         <h2>Driver Dashboard</h2>
         <p>Welcome, <b>{driver.username}</b> ({driver.vehicleType} — {driver.vehicleNumber})</p>
         {notice && (
-          <p style={{ color: '#b00', fontWeight: 600 }}>
+          <p role="alert" style={{ color: '#b00', fontWeight: 600 }}>
             {notice}{' '}
             <button className="btn" style={{ marginLeft: 8 }} onClick={() => setNotice('')}>Dismiss</button>
           </p>
         )}
+        {loadError && <p className="error" role="status">{loadError}</p>}
       </div>
 
-      {!activeRide && <PendingRideList rides={pending} onAccept={accept} onDeny={deny} />}
+      {!activeRide && <PendingRideList rides={pending} loading={loading} onAccept={accept} onDeny={deny} />}
 
       {activeRide && (
         <>

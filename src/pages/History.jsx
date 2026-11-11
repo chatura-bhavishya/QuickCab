@@ -4,19 +4,23 @@ import { getMyRides } from '../services/rideService';
 export default function History() {
   const [rides, setRides] = useState([]);
   const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     getMyRides()
       .then(setRides)
-      .catch(() => setErr('Could not load your ride history. Please try again.'));
+      .catch(() => setErr('Could not load your ride history. Please try again.'))
+      .finally(() => setLoading(false));
   }, []);
 
   return (
     <div className="card">
       <h2>Ride History</h2>
-      {err && <div className="error">{err}</div>}
-      {!err && rides.length === 0 && <p className="muted">No rides yet.</p>}
+      {loading && <p className="muted" role="status">Loading your rides...</p>}
+      {err && <div className="error" role="alert">{err}</div>}
+      {!loading && !err && rides.length === 0 && <p className="muted">No rides yet.</p>}
       {rides.length > 0 && (
+        <div className="table-wrap">
         <table>
           <thead>
             <tr><th>ID</th><th>Pickup</th><th>Drop</th><th>Vehicle</th><th>Status</th></tr>
@@ -33,6 +37,7 @@ export default function History() {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

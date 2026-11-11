@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import FormMessage from '../components/FormMessage';
 import FormField from '../components/forms/FormField';
 import VehicleSelect from '../components/forms/VehicleSelect';
 import { DEFAULT_VEHICLE_TYPE, LIMITS, ROLES } from '../constants';
@@ -41,6 +42,7 @@ export default function Profile() {
   const { values: form, setValues: setForm, handleChange } = useForm({ ...(session?.account || {}), password: '' });
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
 
   if (!session) return <div className="card">Please login first.</div>;
 
@@ -48,12 +50,15 @@ export default function Profile() {
     setMsg(''); setErr('');
     const validationError = validateProfile(isUser, form);
     if (validationError) { setErr(validationError); return; }
+    setSaving(true);
     try {
       const updated = await updateMyAccount(role, editableFields(isUser, form));
       setForm({ ...updated, password: '' });
       setMsg('Profile updated!');
     } catch (e) {
       setErr(getErrorMessage(e, 'Could not update profile. Please try again.'));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -93,11 +98,10 @@ export default function Profile() {
         autoComplete="new-password" />
 
       <div style={{ display: 'flex', gap: 10 }}>
-        <button className="btn" onClick={update}>Update</button>
+        <button className="btn" onClick={update} disabled={saving}>{saving ? 'Saving...' : 'Update'}</button>
         <button className="btn btn-danger" onClick={remove}>Delete Account</button>
       </div>
-      {err && <div className="error">{err}</div>}
-      {msg && <div className="success">{msg}</div>}
+      <FormMessage error={err} success={msg} />
     </div>
   );
 }
