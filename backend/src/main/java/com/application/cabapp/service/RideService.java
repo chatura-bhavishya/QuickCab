@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,7 @@ import com.application.cabapp.exception.ApiException;
 import com.application.cabapp.model.Driver;
 import com.application.cabapp.model.Ride;
 import com.application.cabapp.model.RideStatus;
+import com.application.cabapp.realtime.RideChangedEvent;
 import com.application.cabapp.repository.DriverRepository;
 import com.application.cabapp.repository.RideRepository;
 import com.application.cabapp.repository.UserRepository;
@@ -60,11 +62,12 @@ public class RideService {
     private final DriverService driverService;
     private final AttemptLimiter otpAttemptLimiter;
     private final FareCalculator fareCalculator;
+    private final ApplicationEventPublisher events;
 
     public RideService(RideRepository rideRepository, DriverRepository driverRepository,
                        UserRepository userRepository, RideAccessService rideAccess, DriverService driverService,
                        @Qualifier("otpAttemptLimiter") AttemptLimiter otpAttemptLimiter,
-                       FareCalculator fareCalculator) {
+                       FareCalculator fareCalculator, ApplicationEventPublisher events) {
         this.rideRepository = rideRepository;
         this.driverRepository = driverRepository;
         this.userRepository = userRepository;
@@ -72,6 +75,7 @@ public class RideService {
         this.driverService = driverService;
         this.otpAttemptLimiter = otpAttemptLimiter;
         this.fareCalculator = fareCalculator;
+        this.events = events;
     }
 
     // ---------- Rider actions ----------
@@ -106,7 +110,9 @@ public class RideService {
         }
         ride.setPaid(false);
         ride.setCreatedAt(LocalDateTime.now());
-        return RideResponse.forRider(rideRepository.save(ride));
+        Ride saved = rideRepository.save(ride);
+        events.publishEvent(RideChangedEvent.ride(saved.getId(), saved.getVehicleType(), true));
+        return RideResponse.forRider(saved);
     }
 
     /** Price a trip before booking it (shown on the booking screen). */
@@ -152,6 +158,7 @@ public class RideService {
         driver.setRating(Math.round(average * 10.0) / 10.0); // one decimal place
         driver.setRatingCount(count + 1);
         ride.setDriverRated(true);
+        events.publishEvent(RideChangedEvent.ride(ride.getId(), ride.getVehicleType(), false));
         return DriverResponse.from(driver);
     }
 
@@ -177,6 +184,7 @@ public class RideService {
         if (updated == 0) {
             throw ApiException.conflict("This ride is no longer available");
         }
+        events.publishEvent(RideChangedEvent.ride(rideId, ride.getVehicleType(), true));
         return RideResponse.forDriver(rideAccess.find(rideId));
     }
 
@@ -194,6 +202,7 @@ public class RideService {
             throw ApiException.badRequest("Ride status cannot be changed right now");
         }
         ride.setStatus(target);
+        events.publishEvent(RideChangedEvent.ride(ride.getId(), ride.getVehicleType(), false));
         return RideResponse.forDriver(ride);
     }
 
@@ -210,6 +219,7 @@ public class RideService {
         }
         otpAttemptLimiter.reset(limiterKey);
         ride.setStatus(RideStatus.STARTED);
+        events.publishEvent(RideChangedEvent.ride(ride.getId(), ride.getVehicleType(), false));
         return RideResponse.forDriver(ride);
     }
 
@@ -222,6 +232,7 @@ public class RideService {
         }
         ride.setPaid(true);
         ride.setStatus(RideStatus.COMPLETED);
+        events.publishEvent(RideChangedEvent.ride(ride.getId(), ride.getVehicleType(), false));
         return RideResponse.forDriver(ride);
     }
 
@@ -234,7 +245,9 @@ public class RideService {
         if (!ride.getStatus().isCancellable()) {
             throw ApiException.badRequest("Ride cannot be cancelled");
         }
+        boolean wasPending = ride.getStatus() == RideStatus.PENDING;
         ride.setStatus(principal.is(Role.DRIVER) ? RideStatus.CANCELLED_BY_DRIVER : RideStatus.CANCELLED_BY_USER);
+        events.publishEvent(RideChangedEvent.ride(ride.getId(), ride.getVehicleType(), wasPending));
         return toResponseFor(principal, ride);
     }
 

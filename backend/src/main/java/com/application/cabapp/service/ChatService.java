@@ -3,6 +3,7 @@ package com.application.cabapp.service;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -11,6 +12,7 @@ import com.application.cabapp.dto.response.ChatMessageResponse;
 import com.application.cabapp.exception.ApiException;
 import com.application.cabapp.model.ChatMessage;
 import com.application.cabapp.model.Ride;
+import com.application.cabapp.realtime.RideChangedEvent;
 import com.application.cabapp.repository.ChatRepository;
 import com.application.cabapp.security.AuthPrincipal;
 
@@ -20,10 +22,13 @@ public class ChatService {
 
     private final ChatRepository chatRepository;
     private final RideAccessService rideAccess;
+    private final ApplicationEventPublisher events;
 
-    public ChatService(ChatRepository chatRepository, RideAccessService rideAccess) {
+    public ChatService(ChatRepository chatRepository, RideAccessService rideAccess,
+                       ApplicationEventPublisher events) {
         this.chatRepository = chatRepository;
         this.rideAccess = rideAccess;
+        this.events = events;
     }
 
     @Transactional
@@ -37,7 +42,9 @@ public class ChatService {
         message.setSender(principal.role());
         message.setMessage(request.message().trim());
         message.setSentAt(LocalDateTime.now());
-        return ChatMessageResponse.from(chatRepository.save(message));
+        ChatMessageResponse saved = ChatMessageResponse.from(chatRepository.save(message));
+        events.publishEvent(RideChangedEvent.chat(ride.getId(), ride.getVehicleType()));
+        return saved;
     }
 
     public List<ChatMessageResponse> history(AuthPrincipal principal, Long rideId) {

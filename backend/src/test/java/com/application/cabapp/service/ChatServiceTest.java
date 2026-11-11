@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import com.application.cabapp.dto.request.SendMessageRequest;
 import com.application.cabapp.exception.ApiException;
@@ -30,11 +31,12 @@ class ChatServiceTest {
 
     @Mock ChatRepository chatRepository;
     @Mock RideRepository rideRepository;
+    @Mock ApplicationEventPublisher events;
     private ChatService chatService;
 
     @BeforeEach
     void setUp() {
-        chatService = new ChatService(chatRepository, new RideAccessService(rideRepository));
+        chatService = new ChatService(chatRepository, new RideAccessService(rideRepository), events);
     }
 
     private static Ride ride(Long driverId) {

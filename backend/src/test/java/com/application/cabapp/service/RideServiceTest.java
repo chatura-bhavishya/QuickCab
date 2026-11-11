@@ -18,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 
 import com.application.cabapp.dto.request.BookRideRequest;
@@ -48,6 +49,7 @@ class RideServiceTest {
     @Mock DriverRepository driverRepository;
     @Mock UserRepository userRepository;
     @Mock DriverService driverService;
+    @Mock ApplicationEventPublisher events;
 
     private RideService rideService;
 
@@ -55,7 +57,7 @@ class RideServiceTest {
     void setUp() {
         rideService = new RideService(rideRepository, driverRepository, userRepository,
                 new RideAccessService(rideRepository), driverService,
-                new AttemptLimiter(3, Duration.ofMinutes(15), Clock.systemUTC()), new FareCalculator());
+                new AttemptLimiter(3, Duration.ofMinutes(15), Clock.systemUTC()), new FareCalculator(), events);
     }
 
     private static Ride ride(RideStatus status, Long driverId) {
