@@ -1,7 +1,10 @@
 package com.application.cabapp.model;
 
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
+
+import com.application.cabapp.security.Role;
+
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "chat_messages")
@@ -10,7 +13,10 @@ public class ChatMessage {
     private Long id;
 
     private Long rideId;
-    private String sender; // "USER" or "DRIVER"
+
+    @Enumerated(EnumType.STRING)
+    private Role sender; // USER or DRIVER, taken from the caller's token
+
     private String message;
     private LocalDateTime sentAt = LocalDateTime.now();
 
@@ -18,8 +24,8 @@ public class ChatMessage {
     public void setId(Long id) { this.id = id; }
     public Long getRideId() { return rideId; }
     public void setRideId(Long rideId) { this.rideId = rideId; }
-    public String getSender() { return sender; }
-    public void setSender(String sender) { this.sender = sender; }
+    public Role getSender() { return sender; }
+    public void setSender(Role sender) { this.sender = sender; }
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
     public LocalDateTime getSentAt() { return sentAt; }

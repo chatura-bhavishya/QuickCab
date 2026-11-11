@@ -1,116 +1,90 @@
 package com.application.cabapp.service;
 
-import java.util.Map;
-import java.util.Optional;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.application.cabapp.dto.request.DriverRegisterRequest;
+import com.application.cabapp.dto.request.DriverUpdateRequest;
+import com.application.cabapp.dto.request.LoginRequest;
+import com.application.cabapp.dto.response.AuthResponse;
+import com.application.cabapp.dto.response.DriverResponse;
+import com.application.cabapp.exception.ApiException;
 import com.application.cabapp.model.Driver;
 import com.application.cabapp.repository.DriverRepository;
+import com.application.cabapp.security.AuthPrincipal;
+import com.application.cabapp.security.JwtService;
 import com.application.cabapp.security.PasswordService;
-import com.application.cabapp.validation.InputValidator;
+import com.application.cabapp.security.Role;
 
-/**
- * DriverService — owns ALL business logic for the Driver entity.
- */
+/** Driver accounts: registration, login and managing your own profile. */
 @Service
 public class DriverService {
 
-    @Autowired
-    private DriverRepository driverRepo;
+    private final DriverRepository driverRepository;
+    private final PasswordService passwordService;
+    private final JwtService jwtService;
 
-    @Autowired
-    private PasswordService passwordService;
-
-    // ---------- Basic CRUD ----------
-
-    public Optional<Driver> getDriverById(Long id) {
-        return driverRepo.findById(id);
+    public DriverService(DriverRepository driverRepository, PasswordService passwordService, JwtService jwtService) {
+        this.driverRepository = driverRepository;
+        this.passwordService = passwordService;
+        this.jwtService = jwtService;
     }
 
-    public Optional<Driver> getDriverByUsername(String username) {
-        return driverRepo.findByUsername(username);
-    }
-
-    public Driver updateDriver(Long id, Driver updated) {
-        return driverRepo.findById(id).map(d -> {
-            d.setContact(updated.getContact());
-            d.setVehicleType(updated.getVehicleType());
-            d.setVehicleNumber(updated.getVehicleNumber());
-            if (updated.getPassword() != null && !updated.getPassword().isEmpty()) {
-                d.setPassword(passwordService.hash(updated.getPassword()));
-            }
-            return driverRepo.save(d);
-        }).orElse(null);
-    }
-
-    public void deleteDriver(Long id) {
-        driverRepo.deleteById(id);
-    }
-
-    // ---------- Business operations ----------
-
-    public ResponseEntity<?> register(Driver driver) {
-        String error = InputValidator.firstError(
-                InputValidator.username(driver.getUsername()),
-                InputValidator.password(driver.getPassword()),
-                InputValidator.contact(driver.getContact()),
-                InputValidator.vehicleType(driver.getVehicleType()),
-                InputValidator.vehicleNumber(driver.getVehicleNumber()));
-        if (error != null) return ResponseEntity.badRequest().body(error);
-
-        if (getDriverByUsername(driver.getUsername()).isPresent()) {
-            return ResponseEntity.badRequest().body("Username already exists");
+    @Transactional
+    public DriverResponse register(DriverRegisterRequest request) {
+        if (driverRepository.existsByUsername(request.username())) {
+            throw ApiException.conflict("Username already exists");
         }
-        // Never let a client-supplied id or rating overwrite server-owned data.
-        driver.setId(null);
+        Driver driver = new Driver();
+        driver.setUsername(request.username());
+        driver.setContact(request.contact().trim());
+        driver.setVehicleType(request.vehicleType());
+        driver.setVehicleNumber(request.vehicleNumber().trim());
         driver.setRating(Driver.DEFAULT_RATING);
         driver.setRatingCount(0);
-        driver.setPassword(passwordService.hash(driver.getPassword()));
-        return ResponseEntity.ok(driverRepo.save(driver));
+        driver.setPassword(passwordService.hash(request.password()));
+        return DriverResponse.from(driverRepository.save(driver));
     }
 
-    public ResponseEntity<?> login(Map<String, String> body) {
-        String username = body.get("username");
-        String password = body.get("password");
-        Optional<Driver> found = username == null ? Optional.empty() : getDriverByUsername(username);
+    @Transactional
+    public AuthResponse<DriverResponse> login(LoginRequest request) {
+        Driver driver = driverRepository.findByUsername(request.username())
+                .filter(d -> passwordService.matches(request.password(), d.getPassword()))
+                .orElseThrow(() -> ApiException.unauthorized("Invalid username or password"));
 
-        if (found.isPresent() && passwordService.matches(password, found.get().getPassword())) {
-            Driver driver = found.get();
-            if (passwordService.needsRehash(driver.getPassword())) {
-                // Upgrade a legacy plaintext password to a BCrypt hash.
-                driver.setPassword(passwordService.hash(password));
-                driverRepo.save(driver);
-            }
-            return ResponseEntity.ok(driver);
+        if (passwordService.needsRehash(driver.getPassword())) {
+            // Upgrade a legacy plaintext password to a BCrypt hash.
+            driver.setPassword(passwordService.hash(request.password()));
         }
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid credentials"));
+        String token = jwtService.generateToken(new AuthPrincipal(driver.getId(), Role.DRIVER));
+        return new AuthResponse<>(token, jwtService.getExpirationSeconds(), DriverResponse.from(driver));
     }
 
-    public ResponseEntity<?> getById(Long id) {
-        return getDriverById(id)
-                .<ResponseEntity<?>>map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public DriverResponse getCurrent(AuthPrincipal principal) {
+        return DriverResponse.from(loadCurrent(principal));
     }
 
-    public ResponseEntity<?> update(Long id, Driver updated) {
-        String error = InputValidator.firstError(
-                InputValidator.contact(updated.getContact()),
-                InputValidator.vehicleType(updated.getVehicleType()),
-                InputValidator.vehicleNumber(updated.getVehicleNumber()),
-                InputValidator.optionalPassword(updated.getPassword()));
-        if (error != null) return ResponseEntity.badRequest().body(error);
-
-        Driver d = updateDriver(id, updated);
-        if (d == null) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok(d);
+    @Transactional
+    public DriverResponse updateCurrent(AuthPrincipal principal, DriverUpdateRequest request) {
+        Driver driver = loadCurrent(principal);
+        driver.setContact(request.contact().trim());
+        driver.setVehicleType(request.vehicleType());
+        driver.setVehicleNumber(request.vehicleNumber().trim());
+        if (request.password() != null && !request.password().isEmpty()) {
+            driver.setPassword(passwordService.hash(request.password()));
+        }
+        return DriverResponse.from(driver);
     }
 
-    public ResponseEntity<?> delete(Long id) {
-        deleteDriver(id);
-        return ResponseEntity.ok("Deleted");
+    @Transactional
+    public void deleteCurrent(AuthPrincipal principal) {
+        driverRepository.delete(loadCurrent(principal));
+    }
+
+    /** The caller's own driver account. Used by other services too. */
+    public Driver loadCurrent(AuthPrincipal principal) {
+        principal.requireRole(Role.DRIVER);
+        return driverRepository.findById(principal.id())
+                .orElseThrow(() -> ApiException.unauthorized("Account not found. Please log in again."));
     }
 }

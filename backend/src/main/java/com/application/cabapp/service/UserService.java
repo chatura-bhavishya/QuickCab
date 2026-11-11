@@ -1,117 +1,86 @@
 package com.application.cabapp.service;
 
-import java.util.Map;
-import java.util.Optional;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.application.cabapp.dto.request.LoginRequest;
+import com.application.cabapp.dto.request.UserRegisterRequest;
+import com.application.cabapp.dto.request.UserUpdateRequest;
+import com.application.cabapp.dto.response.AuthResponse;
+import com.application.cabapp.dto.response.UserResponse;
+import com.application.cabapp.exception.ApiException;
 import com.application.cabapp.model.User;
 import com.application.cabapp.repository.UserRepository;
+import com.application.cabapp.security.AuthPrincipal;
+import com.application.cabapp.security.JwtService;
 import com.application.cabapp.security.PasswordService;
-import com.application.cabapp.validation.InputValidator;
+import com.application.cabapp.security.Role;
 
-/**
- * UserService — owns ALL business logic for the User entity.
- * Controllers should delegate directly here and stay thin.
- */
+/** Rider accounts: registration, login and managing your own profile. */
 @Service
 public class UserService {
 
-    @Autowired
-    private UserRepository userRepo;
+    private final UserRepository userRepository;
+    private final PasswordService passwordService;
+    private final JwtService jwtService;
 
-    @Autowired
-    private PasswordService passwordService;
-
-    // ---------- Basic CRUD ----------
-
-    public Optional<User> getUserById(Long id) {
-        return userRepo.findById(id);
+    public UserService(UserRepository userRepository, PasswordService passwordService, JwtService jwtService) {
+        this.userRepository = userRepository;
+        this.passwordService = passwordService;
+        this.jwtService = jwtService;
     }
 
-    public Optional<User> getUserByUsername(String username) {
-        return userRepo.findByUsername(username);
-    }
-
-    public User updateUser(Long id, User updated) {
-        return userRepo.findById(id).map(u -> {
-            u.setEmail(updated.getEmail());
-            u.setContact(updated.getContact());
-            if (updated.getPassword() != null && !updated.getPassword().isEmpty()) {
-                u.setPassword(passwordService.hash(updated.getPassword()));
-            }
-            return userRepo.save(u);
-        }).orElse(null);
-    }
-
-    public void deleteUser(Long id) {
-        userRepo.deleteById(id);
-    }
-
-    // ---------- Business operations ----------
-
-    /** Register a new user. Returns the saved user, or a 400 if invalid / username exists. */
-    public ResponseEntity<?> register(User user) {
-        String error = InputValidator.firstError(
-                InputValidator.username(user.getUsername()),
-                InputValidator.email(user.getEmail()),
-                InputValidator.password(user.getPassword()),
-                InputValidator.contact(user.getContact()));
-        if (error != null) return ResponseEntity.badRequest().body(error);
-
-        if (getUserByUsername(user.getUsername()).isPresent()) {
-            return ResponseEntity.badRequest().body("Username already exists");
+    @Transactional
+    public UserResponse register(UserRegisterRequest request) {
+        if (userRepository.existsByUsername(request.username())) {
+            throw ApiException.conflict("Username already exists");
         }
-        // Never let a client-supplied id overwrite an existing record.
-        user.setId(null);
-        user.setPassword(passwordService.hash(user.getPassword()));
-        return ResponseEntity.ok(userRepo.save(user));
+        User user = new User();
+        user.setUsername(request.username());
+        user.setEmail(request.email().trim());
+        user.setContact(request.contact().trim());
+        user.setPassword(passwordService.hash(request.password()));
+        return UserResponse.from(userRepository.save(user));
     }
 
-    /** Authenticate a user against username/password from a request body map. */
-    public ResponseEntity<?> login(Map<String, String> body) {
-        String username = body.get("username");
-        String password = body.get("password");
-        Optional<User> found = username == null ? Optional.empty() : getUserByUsername(username);
+    @Transactional
+    public AuthResponse<UserResponse> login(LoginRequest request) {
+        User user = userRepository.findByUsername(request.username())
+                .filter(u -> passwordService.matches(request.password(), u.getPassword()))
+                .orElseThrow(() -> ApiException.unauthorized("Invalid username or password"));
 
-        if (found.isPresent() && passwordService.matches(password, found.get().getPassword())) {
-            User user = found.get();
-            if (passwordService.needsRehash(user.getPassword())) {
-                // Upgrade a legacy plaintext password to a BCrypt hash.
-                user.setPassword(passwordService.hash(password));
-                userRepo.save(user);
-            }
-            return ResponseEntity.ok(user);
+        if (passwordService.needsRehash(user.getPassword())) {
+            // Upgrade a legacy plaintext password to a BCrypt hash.
+            user.setPassword(passwordService.hash(request.password()));
         }
-        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(Map.of("error", "Invalid credentials"));
+        String token = jwtService.generateToken(new AuthPrincipal(user.getId(), Role.USER));
+        return new AuthResponse<>(token, jwtService.getExpirationSeconds(), UserResponse.from(user));
     }
 
-    /** Fetch a user by id, returning 404 if absent. */
-    public ResponseEntity<?> getById(Long id) {
-        return getUserById(id)
-                .<ResponseEntity<?>>map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public UserResponse getCurrent(AuthPrincipal principal) {
+        return UserResponse.from(loadCurrent(principal));
     }
 
-    /** Update user, returning 400 if invalid or 404 if not found. */
-    public ResponseEntity<?> update(Long id, User updated) {
-        String error = InputValidator.firstError(
-                InputValidator.email(updated.getEmail()),
-                InputValidator.contact(updated.getContact()),
-                InputValidator.optionalPassword(updated.getPassword()));
-        if (error != null) return ResponseEntity.badRequest().body(error);
-
-        User u = updateUser(id, updated);
-        if (u == null) return ResponseEntity.notFound().build();
-        return ResponseEntity.ok(u);
+    @Transactional
+    public UserResponse updateCurrent(AuthPrincipal principal, UserUpdateRequest request) {
+        User user = loadCurrent(principal);
+        user.setEmail(request.email().trim());
+        user.setContact(request.contact().trim());
+        if (request.password() != null && !request.password().isEmpty()) {
+            user.setPassword(passwordService.hash(request.password()));
+        }
+        return UserResponse.from(user);
     }
 
-    /** Delete user. */
-    public ResponseEntity<?> delete(Long id) {
-        deleteUser(id);
-        return ResponseEntity.ok("Deleted");
+    @Transactional
+    public void deleteCurrent(AuthPrincipal principal) {
+        userRepository.delete(loadCurrent(principal));
+    }
+
+    /** The caller's own account. There is no way to load someone else's. */
+    private User loadCurrent(AuthPrincipal principal) {
+        principal.requireRole(Role.USER);
+        return userRepository.findById(principal.id())
+                .orElseThrow(() -> ApiException.unauthorized("Account not found. Please log in again."));
     }
 }

@@ -1,47 +1,55 @@
 package com.application.cabapp.controller;
 
-import com.application.cabapp.model.User;
-import com.application.cabapp.service.UserService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Map;
+import com.application.cabapp.dto.request.LoginRequest;
+import com.application.cabapp.dto.request.UserRegisterRequest;
+import com.application.cabapp.dto.request.UserUpdateRequest;
+import com.application.cabapp.dto.response.AuthResponse;
+import com.application.cabapp.dto.response.UserResponse;
+import com.application.cabapp.security.AuthPrincipal;
+import com.application.cabapp.service.UserService;
 
-/**
- * Thin HTTP adapter — all logic lives in UserService.
- * Endpoints and request/response shapes are unchanged so the existing
- * frontend axios calls continue to work without modification.
- */
+import jakarta.validation.Valid;
+
+/** Rider accounts. register/login are public; /me requires a rider token. */
 @RestController
 @RequestMapping("/api/users")
 public class UserController {
 
-    @Autowired
-    private UserService userService;
+    private final UserService userService;
+
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody User user) {
-        return userService.register(user);
+    @ResponseStatus(HttpStatus.CREATED)
+    public UserResponse register(@Valid @RequestBody UserRegisterRequest request) {
+        return userService.register(request);
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody Map<String, String> body) {
-        return userService.login(body);
+    public AuthResponse<UserResponse> login(@Valid @RequestBody LoginRequest request) {
+        return userService.login(request);
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<?> get(@PathVariable Long id) {
-        return userService.getById(id);
+    @GetMapping("/me")
+    public UserResponse me(@AuthenticationPrincipal AuthPrincipal principal) {
+        return userService.getCurrent(principal);
     }
 
-    @PutMapping("/{id}")
-    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody User updated) {
-        return userService.update(id, updated);
+    @PutMapping("/me")
+    public UserResponse update(@AuthenticationPrincipal AuthPrincipal principal,
+                               @Valid @RequestBody UserUpdateRequest request) {
+        return userService.updateCurrent(principal, request);
     }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> delete(@PathVariable Long id) {
-        return userService.delete(id);
+    @DeleteMapping("/me")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@AuthenticationPrincipal AuthPrincipal principal) {
+        userService.deleteCurrent(principal);
     }
 }

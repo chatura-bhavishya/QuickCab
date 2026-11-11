@@ -1,9 +1,8 @@
 package com.application.cabapp.model;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-
 import jakarta.persistence.*;
 
+/** A rider. Never returned directly by the API; see UserResponse. */
 @Entity
 @Table(name = "users")
 public class User {
@@ -13,10 +12,7 @@ public class User {
     @Column(unique = true)
     private String username;
     private String email;
-
-    // BCrypt hash. Accepted in requests but never serialized into responses.
-    @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
-    private String password;
+    private String password; // BCrypt hash
     private String contact;
 
     public Long getId() { return id; }

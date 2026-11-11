@@ -1,7 +1,8 @@
 package com.application.cabapp.model;
 
-import jakarta.persistence.*;
 import java.time.LocalDateTime;
+
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "rides")
@@ -19,13 +20,20 @@ public class Ride {
     private String drop;
 
     private String vehicleType;
-    // PENDING, ACCEPTED, DENIED, ON_THE_WAY, ARRIVED, STARTED, COMPLETED
-    private String status = "PENDING";
+
+    @Enumerated(EnumType.STRING)
+    private RideStatus status = RideStatus.PENDING;
+
     private String otp;
     private boolean paid = false;
     // Payment amount (fare) for this ride, computed at booking time.
     private Double amount;
+    // Nullable so the column can be added to existing tables; null means "not rated".
+    private Boolean driverRated;
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    public boolean isDriverRated() { return Boolean.TRUE.equals(driverRated); }
+    public void setDriverRated(boolean driverRated) { this.driverRated = driverRated; }
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
@@ -39,8 +47,8 @@ public class Ride {
     public void setDrop(String drop) { this.drop = drop; }
     public String getVehicleType() { return vehicleType; }
     public void setVehicleType(String vehicleType) { this.vehicleType = vehicleType; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public RideStatus getStatus() { return status; }
+    public void setStatus(RideStatus status) { this.status = status; }
     public String getOtp() { return otp; }
     public void setOtp(String otp) { this.otp = otp; }
     public boolean isPaid() { return paid; }

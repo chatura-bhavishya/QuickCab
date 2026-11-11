@@ -2,45 +2,46 @@ package com.application.cabapp.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Set;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import com.application.cabapp.dto.request.SendMessageRequest;
+import com.application.cabapp.dto.response.ChatMessageResponse;
+import com.application.cabapp.exception.ApiException;
 import com.application.cabapp.model.ChatMessage;
+import com.application.cabapp.model.Ride;
 import com.application.cabapp.repository.ChatRepository;
-import com.application.cabapp.repository.RideRepository;
-import com.application.cabapp.validation.InputValidator;
+import com.application.cabapp.security.AuthPrincipal;
 
-/**
- * ChatService — owns ALL business logic for the ChatMessage entity.
- */
+/** In-ride chat. Only the ride's rider and assigned driver can read or send messages. */
 @Service
 public class ChatService {
 
-    private static final Set<String> SENDERS = Set.of("USER", "DRIVER");
+    private final ChatRepository chatRepository;
+    private final RideAccessService rideAccess;
 
-    @Autowired
-    private ChatRepository chatRepo;
-
-    @Autowired
-    private RideRepository rideRepo;
-
-    public ResponseEntity<?> send(ChatMessage msg) {
-        String error = InputValidator.firstError(
-                msg.getRideId() == null || !rideRepo.existsById(msg.getRideId()) ? "Unknown ride" : null,
-                msg.getSender() == null || !SENDERS.contains(msg.getSender()) ? "Invalid sender" : null,
-                InputValidator.chatMessage(msg.getMessage()));
-        if (error != null) return ResponseEntity.badRequest().body(error);
-
-        // Server owns the id and timestamp.
-        msg.setId(null);
-        msg.setSentAt(LocalDateTime.now());
-        return ResponseEntity.ok(chatRepo.save(msg));
+    public ChatService(ChatRepository chatRepository, RideAccessService rideAccess) {
+        this.chatRepository = chatRepository;
+        this.rideAccess = rideAccess;
     }
 
-    public List<ChatMessage> history(Long rideId) {
-        return chatRepo.findByRideIdOrderByIdAsc(rideId);
+    @Transactional
+    public ChatMessageResponse send(AuthPrincipal principal, SendMessageRequest request) {
+        Ride ride = rideAccess.getForParticipant(principal, request.rideId());
+        if (ride.getDriverId() == null) {
+            throw ApiException.badRequest("Chat is available once a driver accepts the ride");
+        }
+        ChatMessage message = new ChatMessage();
+        message.setRideId(ride.getId());
+        message.setSender(principal.role());
+        message.setMessage(request.message().trim());
+        message.setSentAt(LocalDateTime.now());
+        return ChatMessageResponse.from(chatRepository.save(message));
+    }
+
+    public List<ChatMessageResponse> history(AuthPrincipal principal, Long rideId) {
+        rideAccess.getForParticipant(principal, rideId);
+        return chatRepository.findByRideIdOrderByIdAsc(rideId).stream().map(ChatMessageResponse::from).toList();
     }
 }

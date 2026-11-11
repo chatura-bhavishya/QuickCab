@@ -6,6 +6,8 @@ import java.security.MessageDigest;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import com.application.cabapp.exception.ApiException;
+
 /**
  * Hashes and verifies passwords with BCrypt.
  *
@@ -22,13 +24,16 @@ public class PasswordService {
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     public String hash(String rawPassword) {
+        if (byteLength(rawPassword) > MAX_BCRYPT_BYTES) {
+            throw ApiException.badRequest("Password is too long");
+        }
         return encoder.encode(rawPassword);
     }
 
     public boolean matches(String rawPassword, String storedPassword) {
         if (rawPassword == null || storedPassword == null) return false;
         if (isBcryptHash(storedPassword)) {
-            if (rawPassword.getBytes(StandardCharsets.UTF_8).length > MAX_BCRYPT_BYTES) return false;
+            if (byteLength(rawPassword) > MAX_BCRYPT_BYTES) return false;
             return encoder.matches(rawPassword, storedPassword);
         }
         // Legacy plaintext password: constant-time comparison.
@@ -40,7 +45,11 @@ public class PasswordService {
     /** True when a stored password is legacy plaintext that can be upgraded to a hash. */
     public boolean needsRehash(String storedPassword) {
         return storedPassword != null && !isBcryptHash(storedPassword)
-                && storedPassword.getBytes(StandardCharsets.UTF_8).length <= MAX_BCRYPT_BYTES;
+                && byteLength(storedPassword) <= MAX_BCRYPT_BYTES;
+    }
+
+    private static int byteLength(String value) {
+        return value.getBytes(StandardCharsets.UTF_8).length;
     }
 
     private static boolean isBcryptHash(String value) {

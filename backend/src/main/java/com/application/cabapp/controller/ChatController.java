@@ -1,30 +1,39 @@
 package com.application.cabapp.controller;
 
-import com.application.cabapp.model.ChatMessage;
-import com.application.cabapp.service.ChatService;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 
-/**
- * Thin HTTP adapter — all logic lives in ChatService.
- */
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
+
+import com.application.cabapp.dto.request.SendMessageRequest;
+import com.application.cabapp.dto.response.ChatMessageResponse;
+import com.application.cabapp.security.AuthPrincipal;
+import com.application.cabapp.service.ChatService;
+
+import jakarta.validation.Valid;
+
+/** In-ride chat between the rider and the assigned driver. */
 @RestController
 @RequestMapping("/api/chat")
 public class ChatController {
 
-    @Autowired
-    private ChatService chatService;
+    private final ChatService chatService;
+
+    public ChatController(ChatService chatService) {
+        this.chatService = chatService;
+    }
 
     @PostMapping("/send")
-    public ResponseEntity<?> send(@RequestBody ChatMessage msg) {
-        return chatService.send(msg);
+    @ResponseStatus(HttpStatus.CREATED)
+    public ChatMessageResponse send(@AuthenticationPrincipal AuthPrincipal principal,
+                                    @Valid @RequestBody SendMessageRequest request) {
+        return chatService.send(principal, request);
     }
 
     @GetMapping("/{rideId}")
-    public List<ChatMessage> history(@PathVariable Long rideId) {
-        return chatService.history(rideId);
+    public List<ChatMessageResponse> history(@AuthenticationPrincipal AuthPrincipal principal,
+                                             @PathVariable Long rideId) {
+        return chatService.history(principal, rideId);
     }
 }
