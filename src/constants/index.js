@@ -33,6 +33,19 @@ export const REDIRECT_DELAY_MS = 1200;
 
 export const RATING_STARS = [1, 2, 3, 4, 5];
 
+// Map defaults (OpenStreetMap tiles need the attribution shown on the map).
+export const MAP = {
+  DEFAULT_CENTER: [12.9716, 77.5946], // Bengaluru
+  DEFAULT_ZOOM: 12,
+  TILE_URL: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  ATTRIBUTION: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  PICKUP_COLOR: '#16a34a',
+  DROP_COLOR: '#dc2626',
+  ROUTE_COLOR: '#0f3d6b'
+};
+
+export const PIN_TARGETS = { PICKUP: 'pickup', DROP: 'drop' };
+
 // Ride statuses (must match backend RideStatus.java).
 export const RIDE_STATUS = {
   PENDING: 'PENDING',

@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import ChatPanel from '../components/ChatPanel';
+import RideRouteCard from '../components/map/RideRouteCard';
 import DriverDetailsCard from '../components/ride/DriverDetailsCard';
 import RatingCard from '../components/ride/RatingCard';
 import {
@@ -112,6 +113,8 @@ export default function RideStatus() {
           </div>
         )}
       </div>
+
+      <RideRouteCard ride={ride} />
 
       {driver && <DriverDetailsCard driver={driver} />}
 

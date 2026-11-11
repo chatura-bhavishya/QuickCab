@@ -152,6 +152,21 @@ tr:hover td { background: #f8fafc; }
 .success { color: var(--success); font-size: 14px; margin-top: 8px; font-weight: 600; }
 .muted { color: var(--muted); font-size: 14px; }
 
+/* Map */
+/* z-index 0 keeps Leaflet's own high z-indexes from sliding over the sticky navbar */
+.map-box {
+  position: relative; z-index: 0; border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden; margin-top: 8px;
+}
+.map-loading { display: flex; align-items: center; justify-content: center; color: var(--muted); background: #f8fafc; }
+.pin-summary { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 8px; font-size: 14px; }
+.pin-summary .error { margin-top: 0; }
+.link-button {
+  background: none; border: none; padding: 0; color: var(--primary-light);
+  font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: underline;
+}
+.tabs { margin-bottom: 0; }
+
 /* Accessibility helpers */
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;

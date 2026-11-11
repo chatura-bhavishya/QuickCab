@@ -5,8 +5,16 @@ import apiClient from './apiClient';
 const get = async (url) => (await apiClient.get(url)).data;
 const post = async (url, body) => (await apiClient.post(url, body)).data;
 
+// [lat, lng] pins -> the flat fields the API expects (both pins or neither).
+const pinFields = (pickupPin, dropPin) => (pickupPin && dropPin
+  ? { pickupLat: pickupPin[0], pickupLng: pickupPin[1], dropLat: dropPin[0], dropLng: dropPin[1] }
+  : {});
+
 // Rider
-export const bookRide = ({ pickup, drop, vehicleType }) => post('/rides/book', { pickup, drop, vehicleType });
+export const bookRide = ({ pickup, drop, vehicleType, pickupPin, dropPin }) =>
+  post('/rides/book', { pickup, drop, vehicleType, ...pinFields(pickupPin, dropPin) });
+export const estimateFare = (vehicleType, pickupPin, dropPin) =>
+  post('/rides/estimate', { vehicleType, ...pinFields(pickupPin, dropPin) });
 export const getPastLocations = () => get('/rides/locations');
 export const rateDriver = (rideId, rating) => post(`/rides/${rideId}/rate`, { rating });
 

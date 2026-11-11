@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import ChatPanel from '../components/ChatPanel';
+import RideRouteCard from '../components/map/RideRouteCard';
 import ActiveRideCard from '../components/driver/ActiveRideCard';
 import PendingRideList from '../components/driver/PendingRideList';
 import { DRIVER_ACTIVE_STATUSES, POLL_INTERVAL_MS, RIDE_STATUS, ROLES } from '../constants';
@@ -109,6 +110,7 @@ export default function DriverDashboard() {
         <>
           <ActiveRideCard ride={activeRide} onSetStatus={setStatus} onStart={start}
             onComplete={complete} onCancel={cancel} />
+          <RideRouteCard ride={activeRide} />
           <ChatPanel title="Chat with User" messages={chat} ownSender={ROLES.DRIVER} onSend={handleSend} />
         </>
       )}

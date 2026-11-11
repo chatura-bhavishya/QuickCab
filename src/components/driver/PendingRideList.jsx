@@ -1,3 +1,5 @@
+import { formatDistance } from '../../utils/format';
+
 /** Waiting ride requests for the driver's vehicle type. */
 export default function PendingRideList({ rides, loading, onAccept, onDeny }) {
   return (
@@ -9,6 +11,7 @@ export default function PendingRideList({ rides, loading, onAccept, onDeny }) {
         <div key={r.id} style={{ borderBottom: '1px solid #000', padding: '10px 0' }}>
           <p><b>Pickup:</b> {r.pickup}</p>
           <p><b>Drop:</b> {r.drop}</p>
+          {r.distanceKm != null && <p><b>Distance:</b> {formatDistance(r.distanceKm)}</p>}
           {r.amount != null && (
             <p><b>Payment Amount:</b> ₹{r.amount}</p>
           )}

@@ -2,9 +2,12 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FormMessage from '../components/FormMessage';
 import VehiclePicker from '../components/forms/VehiclePicker';
-import { DEFAULT_VEHICLE_TYPE, LIMITS } from '../constants';
+import PinPicker from '../components/map/PinPicker';
+import { DEFAULT_VEHICLE_TYPE, LIMITS, PIN_TARGETS } from '../constants';
+import { useFareEstimate } from '../hooks/useFareEstimate';
 import { bookRide, getPastLocations } from '../services/rideService';
 import { getErrorMessage } from '../utils/errors';
+import { pinLabel } from '../utils/format';
 import { firstError, validateLocation } from '../utils/validation';
 
 export default function BookRide() {
@@ -16,6 +19,22 @@ export default function BookRide() {
   const [pastDrops, setPastDrops] = useState([]);
   const [err, setErr] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [pickupPin, setPickupPin] = useState(null);
+  const [dropPin, setDropPin] = useState(null);
+  const estimate = useFareEstimate(vehicleType, pickupPin, dropPin);
+
+  const handlePin = (target, position) => {
+    // Fill an empty address box so the rider doesn't have to type one.
+    if (target === PIN_TARGETS.PICKUP) {
+      setPickupPin(position);
+      setPickup(current => current || pinLabel(position));
+    } else {
+      setDropPin(position);
+      setDrop(current => current || pinLabel(position));
+    }
+  };
+
+  const clearPins = () => { setPickupPin(null); setDropPin(null); };
 
   useEffect(() => {
     // Past locations are only autocomplete suggestions, so failures are ignored.
@@ -35,7 +54,7 @@ export default function BookRide() {
 
     setSubmitting(true);
     try {
-      const ride = await bookRide({ pickup, drop, vehicleType });
+      const ride = await bookRide({ pickup, drop, vehicleType, pickupPin, dropPin });
       navigate(`/ride/${ride.id}`);
     } catch (e) {
       setErr(getErrorMessage(e, 'Could not book ride. Try again.'));
@@ -63,6 +82,9 @@ export default function BookRide() {
             {pastDrops.map(p => <option key={p} value={p} />)}
           </datalist>
         </div>
+
+        <PinPicker pickupPin={pickupPin} dropPin={dropPin} onPin={handlePin} onClear={clearPins}
+          estimate={estimate} />
 
         <label id="vehicle-label">Choose Vehicle</label>
         <VehiclePicker value={vehicleType} onChange={setVehicleType} labelledBy="vehicle-label" />
