@@ -1,46 +1,60 @@
 # QuickCab Backend (Spring Boot + MySQL)
 
 REST API for the QuickCab frontend. See the [root README](../README.md) for
-setup and environment variables.
+setup and environment variables, and [ARCHITECTURE.md](../ARCHITECTURE.md) for
+how authentication and ownership checks work.
 
 ```bash
-cp .env.example .env   # set DB_PASSWORD
-mvn spring-boot:run    # http://localhost:8080
-mvn test               # unit tests
+cp .env.example .env      # set DB_PASSWORD and JWT_SECRET
+./mvnw spring-boot:run    # http://localhost:8080
+./mvnw test               # unit, web-layer and H2 integration tests
 ```
 
-## API Endpoints
+## Conventions
 
-All endpoints are under `/api`. Validation failures return `400` with a short
-plain-text message; unexpected errors return `500` with a generic message.
+- All endpoints are under `/api` and exchange JSON.
+- Only register and login are public. Everything else needs `Authorization: Bearer <token>`.
+- The caller is always taken from the token. No endpoint accepts a rider or driver id.
+- Errors look like `{ "status": 400, "error": "message", "fieldErrors": { ... } }`:
+  `400` invalid input or action not allowed now, `401` missing/invalid token or wrong
+  credentials, `403` not your resource or wrong role, `404` not found, `409` conflict.
 
-### Users
-- POST `/api/users/register` body: `{username, email, password, contact}`
-- POST `/api/users/login` body: `{username, password}`
-- GET `/api/users/{id}`
-- PUT `/api/users/{id}` body: `{email, contact, password?}` (blank password keeps the current one)
-- DELETE `/api/users/{id}`
+## Endpoints
 
-### Drivers
-- POST `/api/drivers/register` body: `{username, password, contact, vehicleType, vehicleNumber}`
-- POST `/api/drivers/login` body: `{username, password}`
-- GET / PUT / DELETE `/api/drivers/{id}`
+### Riders (`/api/users`)
+| Method | Path | Auth | Body / notes |
+|--------|------|------|--------------|
+| POST | `/register` | public | `{username, email, password, contact}` → 201 |
+| POST | `/login` | public | `{username, password}` → `{token, expiresInSeconds, account}` |
+| GET | `/me` | rider | own profile |
+| PUT | `/me` | rider | `{email, contact, password?}` (blank password keeps the current one) |
+| DELETE | `/me` | rider | → 204 |
 
-### Rides
-- POST `/api/rides/book` body: `{userId, pickup, drop, vehicleType}` (fare is calculated server-side)
-- GET `/api/rides/pending/{vehicleType}` (driver polls; OTP hidden)
-- POST `/api/rides/{rideId}/accept/{driverId}` (only `PENDING` rides; `409` otherwise)
-- POST `/api/rides/{rideId}/deny`
-- POST `/api/rides/{rideId}/status` body: `{status: "ON_THE_WAY" | "ARRIVED"}`
-- POST `/api/rides/{rideId}/start` body: `{otp: "1234"}` (only from `ARRIVED`)
-- POST `/api/rides/{rideId}/cancel` body: `{by: "USER" | "DRIVER"}` (before the ride starts)
-- POST `/api/rides/{rideId}/pay` (only from `STARTED`; completes the ride)
-- GET `/api/rides/{rideId}` (ride + driver details)
-- GET `/api/rides/user/{userId}` (rider history)
-- GET `/api/rides/driver/{driverId}` (driver history; OTP hidden)
-- GET `/api/rides/locations/{userId}` (past pickups/drops)
-- POST `/api/rides/{rideId}/rate` body: `{rating: 1-5}` (only `COMPLETED` rides)
+### Drivers (`/api/drivers`)
+| Method | Path | Auth | Body / notes |
+|--------|------|------|--------------|
+| POST | `/register` | public | `{username, password, contact, vehicleType, vehicleNumber}` → 201 |
+| POST | `/login` | public | `{username, password}` → `{token, expiresInSeconds, account}` |
+| GET / PUT / DELETE | `/me` | driver | PUT: `{contact, vehicleType, vehicleNumber, password?}` |
 
-### Chat
-- POST `/api/chat/send` body: `{rideId, sender: "USER" | "DRIVER", message}` (max 255 chars)
-- GET `/api/chat/{rideId}`
+### Rides (`/api/rides`)
+| Method | Path | Who | Notes |
+|--------|------|-----|-------|
+| POST | `/book` | rider | `{pickup, drop, vehicleType}` → 201; fare and OTP set by the server |
+| GET | `/locations` | rider | past pickups/drops for autocomplete |
+| POST | `/{id}/rate` | the ride's rider | `{rating: 1-5}`; only once, only when `COMPLETED` |
+| GET | `/pending` | driver | `PENDING` rides for the driver's vehicle type (no OTP) |
+| POST | `/{id}/accept` | driver | only while `PENDING` and matching vehicle type; `409` if already taken |
+| POST | `/{id}/deny` | driver | → 204 (ride stays available to others) |
+| POST | `/{id}/status` | assigned driver | `{status: "ON_THE_WAY" \| "ARRIVED"}`, in order |
+| POST | `/{id}/start` | assigned driver | `{otp: "1234"}`; only from `ARRIVED` |
+| POST | `/{id}/pay` | assigned driver | only from `STARTED`; completes the ride |
+| POST | `/{id}/cancel` | rider or assigned driver | before `STARTED`; who cancelled comes from the token |
+| GET | `/{id}` | rider or assigned driver | `{ride, driver}`; OTP only for the rider |
+| GET | `/mine` | anyone logged in | the caller's ride history |
+
+### Chat (`/api/chat`)
+| Method | Path | Who | Notes |
+|--------|------|-----|-------|
+| POST | `/send` | rider or assigned driver | `{rideId, message}` (max 255 chars) → 201; sender from token |
+| GET | `/{rideId}` | rider or assigned driver | messages in order |
