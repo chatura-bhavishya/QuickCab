@@ -32,9 +32,9 @@ Booking a local ride often means calling a driver, agreeing on a price, and hopi
 
 <!-- Replace these with fresh screenshots: booking with the map, ride status, driver dashboard. -->
 
-| | | |
+| Home | Login | Booking |
 |---|---|---|
-| ![Screenshot 1](screenshots/4e4e8ace-3881-4eb7-a6ed-f4d8fae09498.jpg) | ![Screenshot 2](screenshots/a7b9d60e-6468-4375-8584-50c0376312a7.jpg) | ![Screenshot 3](screenshots/cd664a61-68aa-4814-8188-3a64deb8d1de.jpg) |
+| ![Home page](screenshots/home.jpg) | ![Login](screenshots/login.jpg) | ![Booking a ride](screenshots/book-ride.jpg) |
 
 ## Tech stack
 
@@ -86,6 +86,11 @@ QuickCab/
 ├── docker-compose.yml        MySQL + API + web in one command
 └── .github/workflows/ci.yml
 ```
+
+## Live demo
+
+<!-- Add the link once it is deployed, e.g. https://quickcab-web.onrender.com -->
+Coming soon. See [DEPLOY.md](DEPLOY.md) for how it is hosted (Render + Aiven, both free).
 
 ## Running it
 
@@ -172,3 +177,7 @@ The endpoint list is in [backend/README.md](backend/README.md).
 - **Race conditions show up in simple places.** Two drivers accepting the same ride is a real problem. A conditional `UPDATE ... WHERE status = 'PENDING'` solved it without any locking.
 - **Push the signal, not the data.** Sending only "ride 42 changed" over the socket meant I didn't have to re-implement the permission rules for WebSockets.
 - **Tests change how you refactor.** Once the end-to-end test existed, I could restructure the code without being scared of breaking it.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
