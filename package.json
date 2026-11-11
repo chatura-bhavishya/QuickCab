@@ -1,5 +1,5 @@
 {
-  "name": "cab-booking-frontend",
+  "name": "quickcab",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -35,5 +35,5 @@
     "vite": "^5.3.1",
     "vitest": "^2.1.9"
   },
-  "description": "QuickCab - cab booking web app (React frontend for a Spring Boot API)"
+  "description": "QuickCab: book a car, bike or auto, track it live, start the trip with an OTP"
 }

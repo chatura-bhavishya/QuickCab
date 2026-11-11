@@ -2,184 +2,173 @@
 
 [![CI](https://github.com/chatura-bhavishya/QuickCab/actions/workflows/ci.yml/badge.svg)](https://github.com/chatura-bhavishya/QuickCab/actions/workflows/ci.yml)
 
-**A full-stack, secure cab booking app: riders book a car, bike or auto, and drivers pick up, verify and complete the trip in real time.**
+A cab booking app where riders book a car, bike or auto, watch the driver come to them live, and start the trip with a one-time PIN.
 
-## The Problem
+Built with React and Spring Boot. I started it as a simple CRUD project and kept pushing it until it behaved like something you could actually run: real authentication, people only seeing their own data, live updates, a map with distance-based fares, and a test suite that runs on every push.
 
-Booking a local ride often means phone calls, haggling over the fare and no
-way to know whether the driver who turns up is the one you booked. QuickCab
-puts the whole trip in one place:
+## Why I built it
 
-- the fare is fixed up front by the server,
-- the rider sees every step of the ride live,
-- a one-time PIN (OTP) proves the right driver picked up the right rider,
-- and rider and driver can message each other without sharing phone numbers.
+Booking a local ride often means calling a driver, agreeing on a price, and hoping the person who shows up is the one you spoke to. I wanted to see what it takes to solve those three problems properly:
 
-## Features
+- **Fair price up front.** The server calculates the fare from the distance between your pins. The browser never gets to choose the price.
+- **Know what's happening.** The rider sees every step (accepted, on the way, arrived) the moment the driver taps it.
+- **Right driver, right rider.** The rider gets a 4-digit OTP and tells it to the driver in person. The ride can't start without it, and the driver's app never receives it.
 
-**Riders**
-- Register, log in, and edit or delete their profile
-- Book a ride with pickup/drop autocomplete from past trips
-- Choose Car, Bike or Auto with a fixed, server-calculated fare
-- Track the ride live: `PENDING → ACCEPTED → ON_THE_WAY → ARRIVED → STARTED → COMPLETED`
-- Share an OTP with the driver to start the ride
-- Chat with the assigned driver, cancel before the ride starts, rate the driver once
+## What it does
 
-**Drivers**
-- See pending requests for their own vehicle type and accept or deny them
-- Move the ride through each stage, start it with the rider's OTP, confirm payment
-- Chat with the rider, cancel before pickup, view their ride history
+**As a rider**
+- Sign up, log in, edit or delete your profile
+- Book a ride: type the addresses, or drop pins on the map to get a distance-based price before you book
+- Follow the ride live, see the driver's details and the route on a map
+- Chat with your driver, cancel before the trip starts, rate the driver afterwards (once)
 
-**Security and quality**
-- JWT authentication (Spring Security, stateless) with BCrypt-hashed passwords
-- Ownership checks on every endpoint: people can only see and change their own data
-- Bean Validation on every request plus matching client-side validation
-- Consistent JSON errors with no stack traces; CORS limited to the frontend origin
-- 79 automated tests (JUnit 5, Mockito, MockMvc, H2, Vitest, React Testing Library) run in GitHub Actions
+**As a driver**
+- See new requests for your vehicle type the moment they come in
+- Accept a ride (if two drivers tap at once, only one gets it)
+- Mark yourself on the way and arrived, start the trip with the rider's OTP, confirm payment
+- Chat with the rider and see your ride history
 
 ## Screenshots
 
-<!-- Add or replace screenshots here (e.g. booking screen, ride status, driver dashboard). -->
+<!-- Replace these with fresh screenshots: booking with the map, ride status, driver dashboard. -->
 
 | | | |
 |---|---|---|
-| ![QuickCab screenshot 1](screenshots/4e4e8ace-3881-4eb7-a6ed-f4d8fae09498.jpg) | ![QuickCab screenshot 2](screenshots/a7b9d60e-6468-4375-8584-50c0376312a7.jpg) | ![QuickCab screenshot 3](screenshots/cd664a61-68aa-4814-8188-3a64deb8d1de.jpg) |
+| ![Screenshot 1](screenshots/4e4e8ace-3881-4eb7-a6ed-f4d8fae09498.jpg) | ![Screenshot 2](screenshots/a7b9d60e-6468-4375-8584-50c0376312a7.jpg) | ![Screenshot 3](screenshots/cd664a61-68aa-4814-8188-3a64deb8d1de.jpg) |
 
-## Tech Stack
+## Tech stack
 
-| Layer | Technology |
-|-------|------------|
-| Frontend | React 18, React Router 6, Axios, Vite 5, plain CSS |
-| Backend | Java 17, Spring Boot 3.3 (Web, Data JPA, Security, Validation), JJWT |
-| Database | MySQL 8 (H2 in tests) |
-| Testing | JUnit 5, Mockito, Spring MockMvc, Vitest, React Testing Library |
-| Tooling | Maven Wrapper, ESLint 9, GitHub Actions |
+| | |
+|---|---|
+| **Frontend** | React 18, React Router, Axios, Leaflet + OpenStreetMap, STOMP.js, Vite |
+| **Backend** | Java 17, Spring Boot 3 (Web, Security, Data JPA, Validation, WebSocket), JJWT |
+| **Database** | MySQL 8 (H2 for tests) |
+| **Testing** | JUnit 5, Mockito, MockMvc, Vitest, React Testing Library |
+| **Tooling** | Docker Compose, GitHub Actions, Maven Wrapper, ESLint |
 
-## Architecture Overview
+## How it fits together
 
 ```mermaid
 flowchart LR
-    Browser["React SPA<br/>pages → components → services"] -- "HTTPS + JSON<br/>Authorization: Bearer JWT" --> Filter
-    subgraph API["Spring Boot API"]
-        Filter["JwtAuthenticationFilter"] --> Controllers["Controllers<br/>(@Valid DTOs)"]
-        Controllers --> Services["Services<br/>(business rules + ownership)"]
-        Services --> Repos["Spring Data JPA repositories"]
+    Browser["React app"] -- "REST + JWT" --> API
+    Browser <-- "WebSocket (STOMP): 'ride 42 changed'" --> API
+    subgraph API["Spring Boot"]
+        direction TB
+        Security["JWT filter / STOMP auth"] --> Controllers --> Services --> Repositories
     end
-    Repos --> DB[("MySQL")]
+    Repositories --> DB[("MySQL")]
 ```
 
-- The **frontend** keeps all HTTP calls in `src/services`, attaches the JWT to every request, and polls ride status and chat every 3 seconds.
-- The **backend** is layered: controller → service → repository. Controllers only accept and return DTOs. Services take the caller from the token and enforce who may do what.
+The short version:
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for data flow, database tables, the JWT flow and design decisions.
+- Every request carries a JWT. The server reads **who you are from the token**, never from an id in the URL, and a single class (`RideAccessService`) decides whether you're allowed to touch a given ride.
+- When something changes, the server pushes a tiny "ride 42 changed" message over a WebSocket. The browser then re-fetches through the normal API, so the permission rules apply there too. If the socket drops, the app quietly falls back to polling.
+- Wrong passwords and wrong OTPs are rate-limited, so a 4-digit code can't simply be brute-forced.
 
-## Folder Structure
+There's more detail (the auth flow, the ride state machine, the database tables, and why I made each trade-off) in **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+
+## Project layout
 
 ```
 QuickCab/
-├── src/                          # React frontend
-│   ├── components/               # Reusable UI (LoginForm, ChatPanel, ErrorBoundary, ...)
-│   │   ├── driver/  ride/  forms/
-│   ├── pages/                    # One component per route
-│   ├── hooks/                    # usePolling, useForm
-│   ├── services/                 # API client, auth/session, ride/chat/account calls
-│   ├── constants/                # Statuses, vehicles, limits, storage keys
-│   ├── utils/                    # Validation, error messages, keyboard helpers
-│   └── test/setup.js             # Vitest setup
-├── backend/                      # Spring Boot API
-│   ├── mvnw, mvnw.cmd, pom.xml
+├── src/                      React app
+│   ├── pages/                one component per screen
+│   ├── components/           shared UI (LoginForm, ChatPanel, map/, driver/, ride/, forms/)
+│   ├── hooks/                usePolling, useLiveUpdates, useFareEstimate, useForm
+│   ├── services/             all API + WebSocket calls, session storage
+│   ├── constants/  utils/
+├── backend/                  Spring Boot API
 │   └── src/main/java/com/application/cabapp/
-│       ├── config/               # SecurityConfig (JWT, CORS)
-│       ├── controller/           # REST endpoints
-│       ├── service/              # Business logic + RideAccessService (ownership)
-│       ├── repository/           # Spring Data JPA
-│       ├── model/                # JPA entities and enums
-│       ├── dto/request|response/ # API contracts (validated requests, safe responses)
-│       ├── security/             # JwtService, filter, PasswordService
-│       ├── exception/            # ApiException + global handler
-│       └── validation/           # Shared validation rules
-├── .github/workflows/ci.yml      # CI pipeline
-├── ARCHITECTURE.md
-└── screenshots/
+│       ├── controller/  service/  repository/  model/  dto/
+│       ├── security/         JWT, password hashing, rate limiting
+│       ├── realtime/         WebSocket events and auth
+│       ├── config/  exception/  validation/
+├── docker-compose.yml        MySQL + API + web in one command
+└── .github/workflows/ci.yml
 ```
 
-## Running Locally
+## Running it
 
-### Prerequisites
-- Node.js 20+ and npm
-- Java 17+ (Maven is **not** required; the wrapper downloads it)
-- MySQL 8 running locally
-
-### 1. Backend
+### The quick way (Docker)
 
 ```bash
+cp .env.example .env     # set MYSQL_ROOT_PASSWORD and JWT_SECRET
+docker compose up --build
+```
+
+Then open http://localhost:3000. The API is on http://localhost:8080.
+
+### Without Docker
+
+You'll need Node 20+, Java 17+ and a local MySQL 8. Maven isn't needed because the wrapper downloads it.
+
+```bash
+# 1. API
 cd backend
-cp .env.example .env          # then set DB_PASSWORD and JWT_SECRET
-./mvnw spring-boot:run        # Windows: mvnw.cmd spring-boot:run
-```
+cp .env.example .env     # set DB_PASSWORD and JWT_SECRET
+./mvnw spring-boot:run   # Windows: mvnw.cmd spring-boot:run
 
-The API starts on `http://localhost:8080`. The `cabdb` database and tables are created automatically.
-Run the command from inside `backend/` so `backend/.env` is picked up, or set the variables in your shell/IDE.
-
-### 2. Frontend
-
-```bash
-# from the project root
-cp .env.example .env          # optional; defaults to http://localhost:8080/api
+# 2. Frontend (in another terminal, from the project root)
 npm install
-npm run dev
+npm run dev              # http://localhost:5173
 ```
 
-Open `http://localhost:5173`.
+The database and tables are created on first start.
 
-## Environment Variables
+## Configuration
 
-Real `.env` files are git-ignored; copy the templates.
+Copy the example files. The real `.env` files are git-ignored.
 
-**Backend** ([`backend/.env.example`](backend/.env.example))
+**API** (`backend/.env`, see [`backend/.env.example`](backend/.env.example))
 
-| Variable | Required | Description | Default |
-|----------|----------|-------------|---------|
-| `DB_PASSWORD` | yes | MySQL password | - |
-| `JWT_SECRET` | yes | Token signing secret, at least 32 characters (`openssl rand -base64 48`) | - |
-| `DB_URL` | no | JDBC URL | `jdbc:mysql://localhost:3306/cabdb?...` |
-| `DB_USERNAME` | no | MySQL user | `root` |
-| `JWT_EXPIRATION_MINUTES` | no | How long a login lasts | `1440` (24 h) |
-| `CORS_ALLOWED_ORIGINS` | no | Exact frontend origin(s), comma-separated | `http://localhost:5173` |
-| `PORT` | no | API port | `8080` |
-| `SHOW_SQL` | no | Log SQL for debugging | `false` |
+| Variable | Needed? | What it is | Default |
+|---|---|---|---|
+| `DB_PASSWORD` | yes | MySQL password | none |
+| `JWT_SECRET` | yes | Secret for signing login tokens, 32+ characters (`openssl rand -base64 48`) | none |
+| `DB_URL` / `DB_USERNAME` | no | Where the database is | local `cabdb` / `root` |
+| `JWT_EXPIRATION_MINUTES` | no | How long a login lasts | `1440` |
+| `CORS_ALLOWED_ORIGINS` | no | The frontend's address | `http://localhost:5173` |
+| `LOGIN_MAX_FAILURES` / `LOGIN_LOCK_MINUTES` | no | Brute-force protection | `5` / `15` |
+| `PORT`, `SHOW_SQL` | no | API port, SQL logging | `8080`, `false` |
 
-**Frontend** ([`.env.example`](.env.example))
+**Frontend** (`.env`, see [`.env.example`](.env.example))
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `VITE_API_BASE_URL` | Base URL of the API | `http://localhost:8080/api` |
+| Variable | What it is | Default |
+|---|---|---|
+| `VITE_API_BASE_URL` | Where the API lives | `http://localhost:8080/api` |
+| `VITE_WS_URL` | WebSocket address, if it's somewhere unusual | worked out from the API URL |
 
-## Running Tests
+## Tests
 
 ```bash
-# Backend: unit, web-layer (security) and H2 end-to-end tests
-cd backend && ./mvnw test
-
-# Frontend: Vitest + React Testing Library
-npm test            # single run
-npm run test:watch  # watch mode
+cd backend && ./mvnw test   # 61 tests, including a full ride on H2 and a real WebSocket connection
+npm test                    # 45 frontend tests (Vitest + React Testing Library)
 npm run lint
 ```
 
-CI runs all of these plus both production builds on every push and pull request.
+GitHub Actions runs all of that, plus both production builds and the Docker images, on every push.
+
+The two tests I'd point to first:
+- `RideFlowIntegrationTest` books and completes a ride with two riders and two drivers, and checks at every step that nobody can see or change what isn't theirs.
+- `LiveUpdatesIntegrationTest` opens real WebSocket connections and checks that the rider hears about the driver accepting, while a stranger is refused.
 
 ## API
 
-The endpoint reference is in [backend/README.md](backend/README.md).
+The endpoint list is in [backend/README.md](backend/README.md).
 
-## Future Improvements
+## What I'd do next
 
-- **Real-time updates** with WebSockets/STOMP instead of 3-second polling
-- **httpOnly refresh-token cookies** instead of keeping the access token in `localStorage`
-- **Rate limiting** on login and OTP attempts (e.g. Bucket4j) and account lockout
-- **Flyway migrations** instead of `ddl-auto=update`, plus foreign keys and indexes
-- **Maps and live location** (pickup pins, ETA, distance-based fares)
-- **Payments** through a gateway instead of the driver confirming cash
-- **Driver matching** by distance instead of a first-come list
-- **Docker Compose** for one-command local setup, and deployment to a cloud host
+- Use a routing service for real road distance; the fare currently uses the straight line between the pins
+- Show the driver's live location on the rider's map
+- Move the login token to an httpOnly cookie with refresh tokens
+- Use Flyway migrations instead of letting Hibernate manage the schema
+- Run the integration tests against real MySQL with Testcontainers
+- Add real payments instead of the driver confirming cash
+- Deploy it somewhere public with a demo account
+
+## What I learned
+
+- **Security is mostly about where you get identity from.** The first version trusted ids sent by the browser, so anyone could edit anyone's profile. Taking identity only from the token removed that whole class of bug.
+- **Race conditions show up in simple places.** Two drivers accepting the same ride is a real problem. A conditional `UPDATE ... WHERE status = 'PENDING'` solved it without any locking.
+- **Push the signal, not the data.** Sending only "ride 42 changed" over the socket meant I didn't have to re-implement the permission rules for WebSockets.
+- **Tests change how you refactor.** Once the end-to-end test existed, I could restructure the code without being scared of breaking it.

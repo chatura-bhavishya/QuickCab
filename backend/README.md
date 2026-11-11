@@ -17,7 +17,8 @@ cp .env.example .env      # set DB_PASSWORD and JWT_SECRET
 - The caller is always taken from the token. No endpoint accepts a rider or driver id.
 - Errors look like `{ "status": 400, "error": "message", "fieldErrors": { ... } }`:
   `400` invalid input or action not allowed now, `401` missing/invalid token or wrong
-  credentials, `403` not your resource or wrong role, `404` not found, `409` conflict.
+  credentials, `403` not your resource or wrong role, `404` not found, `409` conflict,
+  `429` too many failed logins or OTP attempts (try again later).
 
 ## Endpoints
 
@@ -40,7 +41,8 @@ cp .env.example .env      # set DB_PASSWORD and JWT_SECRET
 ### Rides (`/api/rides`)
 | Method | Path | Who | Notes |
 |--------|------|-----|-------|
-| POST | `/book` | rider | `{pickup, drop, vehicleType}` → 201; fare and OTP set by the server |
+| POST | `/estimate` | anyone logged in | `{vehicleType, pickupLat, pickupLng, dropLat, dropLng}` → `{distanceKm, fare}` |
+| POST | `/book` | rider | `{pickup, drop, vehicleType}` plus optional pins (`pickupLat`, `pickupLng`, `dropLat`, `dropLng`; all four or none) → 201. Fare and OTP are set by the server |
 | GET | `/locations` | rider | past pickups/drops for autocomplete |
 | POST | `/{id}/rate` | the ride's rider | `{rating: 1-5}`; only once, only when `COMPLETED` |
 | GET | `/pending` | driver | `PENDING` rides for the driver's vehicle type (no OTP) |
@@ -58,3 +60,15 @@ cp .env.example .env      # set DB_PASSWORD and JWT_SECRET
 |--------|------|-----|-------|
 | POST | `/send` | rider or assigned driver | `{rideId, message}` (max 255 chars) → 201; sender from token |
 | GET | `/{rideId}` | rider or assigned driver | messages in order |
+
+## Live updates (WebSocket)
+
+Connect to `ws://<host>/ws` with STOMP and send `Authorization: Bearer <token>` in the CONNECT frame.
+
+| Topic | Who can subscribe | Message |
+|-------|-------------------|---------|
+| `/topic/rides/{id}` | that ride's rider or assigned driver | `{type: "RIDE" or "CHAT", rideId}` |
+| `/topic/pending/{car,bike,auto}` | drivers with that vehicle type | `{type: "RIDE", rideId}` |
+
+Messages only say *what* changed. Fetch the details through the REST endpoints above.
+

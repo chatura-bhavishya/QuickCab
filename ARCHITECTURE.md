@@ -1,7 +1,8 @@
 # QuickCab Architecture
 
-This document explains how a request moves through QuickCab, how the data is
-stored, how authentication works, and why the main design choices were made.
+Notes on how QuickCab works under the hood: how a request travels through the
+app, how live updates reach the browser, how the data is stored, how login and
+permissions work, and why I made the choices I did.
 
 ## 1. System Overview
 
@@ -11,8 +12,10 @@ flowchart LR
         Pages["pages/"] --> Components["components/ + hooks/"]
         Pages --> Services["services/<br/>apiClient (axios)"]
         Services --> Session["session.js<br/>(localStorage)"]
+        Live["useLiveUpdates<br/>(STOMP client)"]
     end
     Services -- "REST/JSON + Bearer JWT" --> SecurityChain
+    Live <-- "WebSocket /ws<br/>JWT on CONNECT" --> Broker
     subgraph Backend["Spring Boot API"]
         SecurityChain["Spring Security chain<br/>CORS → JwtAuthenticationFilter → authorize"] --> Controller
         Controller["@RestController<br/>@Valid request DTOs"] --> Service["@Service<br/>business rules"]
@@ -20,6 +23,8 @@ flowchart LR
         Service --> Repo["JpaRepository"]
         Access --> Repo
         Advice["GlobalExceptionHandler"] -.-> Controller
+        Service -- "RideChangedEvent" --> Broadcaster["RideEventBroadcaster<br/>(after commit)"]
+        Broadcaster --> Broker["STOMP broker<br/>+ StompAuthInterceptor"]
     end
     Repo --> MySQL[("MySQL")]
 ```
@@ -41,21 +46,21 @@ sequenceDiagram
     participant DB as MySQL
     participant D as Driver (React)
 
-    R->>API: POST /api/rides/book {pickup, drop, vehicleType} + JWT
-    API->>API: Validate DTO, read rider id from JWT
-    API->>DB: INSERT ride (PENDING, fare from server, random OTP)
+    R->>API: POST /api/rides/estimate {vehicleType, pins} (optional)
+    API-->>R: distance + fare
+    R->>API: POST /api/rides/book {pickup, drop, vehicleType, pins?} + JWT
+    API->>API: Validate DTO, read rider id from JWT, work out the fare
+    API->>DB: INSERT ride (PENDING, server fare, random OTP)
     API-->>R: 201 ride (with OTP)
-    loop every 3 s
-        D->>API: GET /api/rides/pending
-        API-->>D: pending rides for the driver's vehicle type (no OTP)
-    end
+    API--)D: WebSocket /topic/pending/car: "ride changed"
+    D->>API: GET /api/rides/pending
+    API-->>D: pending rides for the driver's vehicle type (no OTP)
     D->>API: POST /api/rides/{id}/accept
     API->>DB: UPDATE ... SET driver, ACCEPTED WHERE id=? AND status='PENDING'
     API-->>D: 200 (or 409 if another driver was first)
-    loop every 3 s
-        R->>API: GET /api/rides/{id}
-        API-->>R: ride + driver details
-    end
+    API--)R: WebSocket /topic/rides/{id}: "ride changed"
+    R->>API: GET /api/rides/{id}
+    API-->>R: ride + driver details
     D->>API: status ON_THE_WAY → ARRIVED
     R-->>D: tells the driver the OTP in person
     D->>API: POST /api/rides/{id}/start {otp}
@@ -83,11 +88,55 @@ stateDiagram-v2
     COMPLETED --> [*]
 ```
 
+If the WebSocket isn't connected, both screens fall back to asking every 3
+seconds; while it is connected they still check every 30 seconds, just in case
+a message was missed.
+
 Every transition is checked on the server. For example, `/status` only allows
 `ACCEPTED → ON_THE_WAY` and `ON_THE_WAY → ARRIVED`, and payment is only
 accepted from `STARTED`.
 
-## 3. Database
+## 3. Live Updates (WebSockets)
+
+```mermaid
+sequenceDiagram
+    participant S as RideService
+    participant TX as Transaction
+    participant B as RideEventBroadcaster
+    participant WS as STOMP broker
+    participant C as Browser
+
+    C->>WS: CONNECT (Authorization: Bearer JWT)
+    WS->>WS: StompAuthInterceptor checks the token
+    C->>WS: SUBSCRIBE /topic/rides/42
+    WS->>WS: only the ride's rider or assigned driver
+    S->>S: driver accepts ride 42
+    S->>TX: publish RideChangedEvent(42)
+    TX-->>B: after commit
+    B->>WS: send {type: RIDE, rideId: 42}
+    WS-->>C: message
+    C->>C: re-fetch GET /api/rides/42 over REST
+```
+
+A few deliberate choices here:
+
+- **Signals, not data.** The socket only says "ride 42 changed". The browser re-fetches over REST, so the existing rules (for example, only the rider sees the OTP) don't have to be duplicated for WebSockets.
+- **After commit.** Events are sent from a `@TransactionalEventListener(AFTER_COMMIT)`, so when the browser re-fetches, the change is definitely in the database.
+- **Auth on CONNECT.** Browsers can't set headers on the WebSocket handshake, so the token travels in the STOMP CONNECT frame. Subscriptions are checked too: `/topic/rides/{id}` only for that ride's people, `/topic/pending/{type}` only for drivers with that vehicle. Clients can't SEND anything.
+- **In-memory broker.** Fine for one server. With several instances you'd plug in RabbitMQ or Redis so every instance sees every event.
+
+## 4. Map and Fares
+
+Riders can optionally drop a pickup and a drop pin (Leaflet + OpenStreetMap tiles).
+
+- With both pins, `FareCalculator` works out the straight-line (haversine) distance and charges `base + perKm × km`, but never less than the vehicle's minimum. Without pins, the minimum applies, which is exactly the old flat fare, so older clients and rides keep working.
+- `POST /api/rides/estimate` lets the booking screen show the price before you commit. The booking itself recalculates on the server; the estimate is just for display.
+- Distances over 300 km are rejected as mis-placed pins.
+- The map code is lazy-loaded, so Leaflet only downloads on screens that show a map.
+
+Known limitation: the straight line is shorter than the real road, so fares come out slightly low. A routing API (OSRM, Google Directions) would fix that.
+
+## 5. Database
 
 Tables are created by Hibernate (`ddl-auto=update`). Relationships are by id
 columns (no JPA associations), which keeps entities simple and avoids lazy-loading
@@ -127,6 +176,11 @@ erDiagram
         varchar otp "4 digits"
         bit paid
         double amount "server-calculated fare"
+        double pickup_lat "optional map pins"
+        double pickup_lng
+        double drop_lat
+        double drop_lng
+        double distance_km
         bit driver_rated
         datetime created_at
     }
@@ -139,10 +193,13 @@ erDiagram
     }
 ```
 
+Indexes: `rides(user_id)`, `rides(driver_id)`, `rides(status, vehicle_type)` and
+`chat_messages(ride_id)`, which are exactly the columns the app filters on.
+
 Riders and drivers are separate tables, so an id alone is ambiguous. That is why
 the JWT always carries both the id and the role.
 
-## 4. Authentication and Authorization (JWT)
+## 6. Authentication and Authorization (JWT)
 
 ```mermaid
 sequenceDiagram
@@ -175,12 +232,17 @@ sequenceDiagram
 - `RideAccessService` is the single place that decides who may touch a ride: `getForRider`, `getForAssignedDriver` and `getForParticipant`.
 - Responses are role-aware: the OTP is only returned to the rider.
 
+**Brute-force protection**
+- After 5 wrong passwords for an account, logins for it are refused (429) for 15 minutes.
+- After 5 wrong OTPs for a ride, starting it is refused for 15 minutes. A 4-digit OTP has only 9000 possible values, so without this it could be guessed.
+- `AttemptLimiter` keeps the counts in memory. With several servers it would move to Redis. Keying on the username means someone could temporarily lock a user out on purpose; adding the client IP is the usual fix.
+
 **Frontend side**
 - `apiClient` adds `Authorization: Bearer …` to every request. On a 401 it clears the session and redirects to the login page.
 - `RequireAuth` guards routes for a better UX. It is not the security boundary; the API is.
 - Logout deletes the token locally. Tokens are stateless and expire on their own.
 
-## 5. Error Handling
+## 7. Error Handling
 
 All errors use one JSON shape:
 
@@ -193,7 +255,14 @@ All errors use one JSON shape:
 - The security layer writes the same shape for 401/403.
 - The frontend's `getErrorMessage` only displays short, plain messages from this shape and falls back to a friendly default otherwise. An `ErrorBoundary` catches rendering crashes.
 
-## 6. Key Design Decisions
+## 8. Running It (Docker)
+
+`docker compose up --build` starts three containers: MySQL (not exposed to the host),
+the API (built with the Maven wrapper, running as a non-root user) and an nginx
+container serving the React build with SPA routing and basic security headers.
+CI builds both images on every push.
+
+## 9. Key Design Decisions
 
 | Decision | Why | Trade-off |
 |----------|-----|-----------|
@@ -204,7 +273,10 @@ All errors use one JSON shape:
 | **DTOs (Java records)** for requests and responses | Validation lives on the request; responses can't leak fields like passwords; API is decoupled from the schema | Some mapping code |
 | **Atomic conditional UPDATE** to accept rides | Two drivers clicking Accept at once can't both win, without locks or version columns | A custom JPQL query |
 | **Enums stored as strings** | Readable data; existing rows stayed compatible when the code moved from strings to enums | Renaming a constant needs a data migration |
-| **Polling every 3 s** | Simple, works everywhere, no extra infrastructure | More requests than WebSockets; fine at this scale |
+| **WebSockets for signals + polling as a fallback** | Instant updates with far fewer requests; still works if the socket is blocked | Two code paths to keep in mind |
+| **Events sent after commit** | Clients never re-fetch stale data | Needs a transactional event listener rather than sending straight from the service |
+| **Straight-line fares** | No paid routing API, works offline in tests | Undercharges a little versus real road distance |
+| **In-memory rate limiting** | Zero extra infrastructure | Resets on restart; per-instance only |
 | **Server-side fare and OTP** | Clients can't choose their price; OTP comes from `SecureRandom` | Flat fares only for now |
 | **Frontend services layer + hooks** | Pages stay declarative; API changes touch one file; logic is unit-testable | A few more files |
 | **H2 for the integration test** | The full Spring context and every rule are tested in CI without a database server | H2 is not MySQL; Testcontainers would be closer to production |
