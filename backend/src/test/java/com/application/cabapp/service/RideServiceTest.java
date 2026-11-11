@@ -55,7 +55,7 @@ class RideServiceTest {
     void setUp() {
         rideService = new RideService(rideRepository, driverRepository, userRepository,
                 new RideAccessService(rideRepository), driverService,
-                new AttemptLimiter(3, Duration.ofMinutes(15), Clock.systemUTC()));
+                new AttemptLimiter(3, Duration.ofMinutes(15), Clock.systemUTC()), new FareCalculator());
     }
 
     private static Ride ride(RideStatus status, Long driverId) {
@@ -100,6 +100,27 @@ class RideServiceTest {
         assertThat(booked.pickup()).isEqualTo("Home");
         assertThat(booked.otp()).matches("\\d{4}");
         assertThat(booked.driverId()).isNull();
+    }
+
+    @Test
+    void bookingWithPinsUsesDistanceBasedFare() {
+        when(userRepository.existsById(1L)).thenReturn(true);
+        when(rideRepository.save(any(Ride.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        // MG Road to Whitefield, Bengaluru: about 16 km in a straight line.
+        RideResponse booked = rideService.book(RIDER,
+                new BookRideRequest("MG Road", "Whitefield", "car", 12.9756, 77.6050, 12.9698, 77.7500));
+
+        assertThat(booked.distanceKm()).isBetween(15.0, 16.5);
+        assertThat(booked.amount()).isEqualTo(50 + 15 * booked.distanceKm(), org.assertj.core.data.Offset.offset(1.0));
+        assertThat(booked.pickupLat()).isEqualTo(12.9756);
+    }
+
+    @Test
+    void halfSetPinsAreRejected() {
+        assertThatThrownBy(() -> rideService.book(RIDER,
+                new BookRideRequest("A", "B", "car", 12.9, 77.6, null, null)))
+                .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.BAD_REQUEST));
     }
 
     @Test

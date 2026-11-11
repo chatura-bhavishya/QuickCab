@@ -12,10 +12,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.application.cabapp.dto.request.BookRideRequest;
+import com.application.cabapp.dto.request.FareEstimateRequest;
 import com.application.cabapp.dto.request.RateRideRequest;
 import com.application.cabapp.dto.request.RideStatusRequest;
+import com.application.cabapp.dto.request.RoutePoints;
 import com.application.cabapp.dto.request.StartRideRequest;
 import com.application.cabapp.dto.response.DriverResponse;
+import com.application.cabapp.dto.response.FareEstimateResponse;
 import com.application.cabapp.dto.response.LocationsResponse;
 import com.application.cabapp.dto.response.RideDetailsResponse;
 import com.application.cabapp.dto.response.RideResponse;
@@ -23,7 +26,6 @@ import com.application.cabapp.exception.ApiException;
 import com.application.cabapp.model.Driver;
 import com.application.cabapp.model.Ride;
 import com.application.cabapp.model.RideStatus;
-import com.application.cabapp.model.VehicleType;
 import com.application.cabapp.repository.DriverRepository;
 import com.application.cabapp.repository.RideRepository;
 import com.application.cabapp.repository.UserRepository;
@@ -42,12 +44,6 @@ public class RideService {
     private static final int OTP_MIN = 1000;
     private static final int OTP_RANGE = 9000; // OTPs are 4 digits: 1000-9999
 
-    /** Flat fares per vehicle type (INR). */
-    private static final Map<String, Double> FARES = Map.of(
-            VehicleType.BIKE, 60.0,
-            VehicleType.AUTO, 90.0,
-            VehicleType.CAR, 150.0);
-
     /**
      * Status changes a driver may make through the generic /status endpoint,
      * mapped to the status the ride must currently be in. STARTED (needs OTP),
@@ -63,16 +59,19 @@ public class RideService {
     private final RideAccessService rideAccess;
     private final DriverService driverService;
     private final AttemptLimiter otpAttemptLimiter;
+    private final FareCalculator fareCalculator;
 
     public RideService(RideRepository rideRepository, DriverRepository driverRepository,
                        UserRepository userRepository, RideAccessService rideAccess, DriverService driverService,
-                       @Qualifier("otpAttemptLimiter") AttemptLimiter otpAttemptLimiter) {
+                       @Qualifier("otpAttemptLimiter") AttemptLimiter otpAttemptLimiter,
+                       FareCalculator fareCalculator) {
         this.rideRepository = rideRepository;
         this.driverRepository = driverRepository;
         this.userRepository = userRepository;
         this.rideAccess = rideAccess;
         this.driverService = driverService;
         this.otpAttemptLimiter = otpAttemptLimiter;
+        this.fareCalculator = fareCalculator;
     }
 
     // ---------- Rider actions ----------
@@ -80,6 +79,9 @@ public class RideService {
     @Transactional
     public RideResponse book(AuthPrincipal principal, BookRideRequest request) {
         principal.requireRole(Role.USER);
+        if (request.isPartial()) {
+            throw ApiException.badRequest("Set both the pickup and drop pins, or neither");
+        }
         if (!userRepository.existsById(principal.id())) {
             throw ApiException.unauthorized("Account not found. Please log in again.");
         }
@@ -90,10 +92,35 @@ public class RideService {
         ride.setVehicleType(request.vehicleType());
         ride.setStatus(RideStatus.PENDING);
         ride.setOtp(String.valueOf(OTP_MIN + RANDOM.nextInt(OTP_RANGE)));
-        ride.setAmount(FARES.get(request.vehicleType())); // always computed server-side
+        // The fare is always worked out here, never taken from the client.
+        if (request.hasPins()) {
+            double km = tripDistance(request);
+            ride.setPickupLat(request.pickupLat());
+            ride.setPickupLng(request.pickupLng());
+            ride.setDropLat(request.dropLat());
+            ride.setDropLng(request.dropLng());
+            ride.setDistanceKm(km);
+            ride.setAmount(fareCalculator.fareFor(request.vehicleType(), km));
+        } else {
+            ride.setAmount(fareCalculator.minimumFare(request.vehicleType()));
+        }
         ride.setPaid(false);
         ride.setCreatedAt(LocalDateTime.now());
         return RideResponse.forRider(rideRepository.save(ride));
+    }
+
+    /** Price a trip before booking it (shown on the booking screen). */
+    public FareEstimateResponse estimate(FareEstimateRequest request) {
+        double km = tripDistance(request);
+        return new FareEstimateResponse(km, fareCalculator.fareFor(request.vehicleType(), km));
+    }
+
+    private double tripDistance(RoutePoints pins) {
+        double km = fareCalculator.distanceKm(pins.pickupLat(), pins.pickupLng(), pins.dropLat(), pins.dropLng());
+        if (km > FareCalculator.MAX_TRIP_KM) {
+            throw ApiException.badRequest("Pickup and drop are too far apart");
+        }
+        return km;
     }
 
     public LocationsResponse getPastLocations(AuthPrincipal principal) {

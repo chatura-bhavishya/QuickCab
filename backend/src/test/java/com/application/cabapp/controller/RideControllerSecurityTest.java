@@ -51,7 +51,7 @@ class RideControllerSecurityTest {
 
     private static RideResponse sampleRide() {
         return new RideResponse(100L, 1L, null, "A", "B", "car", RideStatus.PENDING, "1234",
-                false, 150.0, false, LocalDateTime.now());
+                false, 150.0, false, LocalDateTime.now(), null, null, null, null, null);
     }
 
     @Test

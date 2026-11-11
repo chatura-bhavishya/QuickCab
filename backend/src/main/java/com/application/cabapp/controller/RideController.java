@@ -7,10 +7,12 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import com.application.cabapp.dto.request.BookRideRequest;
+import com.application.cabapp.dto.request.FareEstimateRequest;
 import com.application.cabapp.dto.request.RateRideRequest;
 import com.application.cabapp.dto.request.RideStatusRequest;
 import com.application.cabapp.dto.request.StartRideRequest;
 import com.application.cabapp.dto.response.DriverResponse;
+import com.application.cabapp.dto.response.FareEstimateResponse;
 import com.application.cabapp.dto.response.LocationsResponse;
 import com.application.cabapp.dto.response.RideDetailsResponse;
 import com.application.cabapp.dto.response.RideResponse;
@@ -40,6 +42,11 @@ public class RideController {
     public RideResponse book(@AuthenticationPrincipal AuthPrincipal principal,
                              @Valid @RequestBody BookRideRequest request) {
         return rideService.book(principal, request);
+    }
+
+    @PostMapping("/estimate")
+    public FareEstimateResponse estimate(@Valid @RequestBody FareEstimateRequest request) {
+        return rideService.estimate(request);
     }
 
     @GetMapping("/locations")

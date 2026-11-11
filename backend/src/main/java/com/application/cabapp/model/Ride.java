@@ -34,6 +34,13 @@ public class Ride {
     private boolean paid = false;
     // Payment amount (fare) for this ride, computed at booking time.
     private Double amount;
+
+    // Optional map pins; null when the rider booked without the map.
+    private Double pickupLat;
+    private Double pickupLng;
+    private Double dropLat;
+    private Double dropLng;
+    private Double distanceKm;
     // Nullable so the column can be added to existing tables; null means "not rated".
     private Boolean driverRated;
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -61,6 +68,16 @@ public class Ride {
     public void setPaid(boolean paid) { this.paid = paid; }
     public Double getAmount() { return amount; }
     public void setAmount(Double amount) { this.amount = amount; }
+    public Double getPickupLat() { return pickupLat; }
+    public void setPickupLat(Double pickupLat) { this.pickupLat = pickupLat; }
+    public Double getPickupLng() { return pickupLng; }
+    public void setPickupLng(Double pickupLng) { this.pickupLng = pickupLng; }
+    public Double getDropLat() { return dropLat; }
+    public void setDropLat(Double dropLat) { this.dropLat = dropLat; }
+    public Double getDropLng() { return dropLng; }
+    public void setDropLng(Double dropLng) { this.dropLng = dropLng; }
+    public Double getDistanceKm() { return distanceKm; }
+    public void setDistanceKm(Double distanceKm) { this.distanceKm = distanceKm; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }
