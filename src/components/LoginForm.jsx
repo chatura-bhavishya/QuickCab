@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { LIMITS } from '../constants';
 import { useForm } from '../hooks/useForm';
 import { login } from '../services/authService';
+import { getErrorMessage } from '../utils/errors';
 import FormField from './forms/FormField';
 import FormMessage from './FormMessage';
 
@@ -21,8 +22,8 @@ export default function LoginForm({ role, title, redirectTo, registerPrompt, reg
     try {
       await login(role, values);
       navigate(redirectTo);
-    } catch {
-      setErr('Invalid username or password');
+    } catch (e) {
+      setErr(getErrorMessage(e, 'Invalid username or password'));
     } finally {
       setSubmitting(false);
     }

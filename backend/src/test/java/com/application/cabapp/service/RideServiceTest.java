@@ -8,6 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,6 +32,7 @@ import com.application.cabapp.model.RideStatus;
 import com.application.cabapp.repository.DriverRepository;
 import com.application.cabapp.repository.RideRepository;
 import com.application.cabapp.repository.UserRepository;
+import com.application.cabapp.security.AttemptLimiter;
 import com.application.cabapp.security.AuthPrincipal;
 import com.application.cabapp.security.Role;
 
@@ -51,7 +54,8 @@ class RideServiceTest {
     @BeforeEach
     void setUp() {
         rideService = new RideService(rideRepository, driverRepository, userRepository,
-                new RideAccessService(rideRepository), driverService);
+                new RideAccessService(rideRepository), driverService,
+                new AttemptLimiter(3, Duration.ofMinutes(15), Clock.systemUTC()));
     }
 
     private static Ride ride(RideStatus status, Long driverId) {
@@ -190,6 +194,18 @@ class RideServiceTest {
                 .hasMessage("Invalid OTP");
         assertThat(rideService.start(DRIVER, 100L, new StartRideRequest("4321")).status())
                 .isEqualTo(RideStatus.STARTED);
+    }
+
+    @Test
+    void otpGuessingIsCutOff() {
+        when(rideRepository.findById(100L)).thenReturn(Optional.of(ride(RideStatus.ARRIVED, DRIVER.id())));
+
+        for (int i = 0; i < 3; i++) {
+            assertThatThrownBy(() -> rideService.start(DRIVER, 100L, new StartRideRequest("0000")))
+                    .hasMessage("Invalid OTP");
+        }
+        assertThatThrownBy(() -> rideService.start(DRIVER, 100L, new StartRideRequest("4321")))
+                .satisfies(e -> assertThat(statusOf(e)).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
     }
 
     @Test

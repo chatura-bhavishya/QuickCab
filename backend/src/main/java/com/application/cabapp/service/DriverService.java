@@ -13,6 +13,7 @@ import com.application.cabapp.model.Driver;
 import com.application.cabapp.repository.DriverRepository;
 import com.application.cabapp.security.AuthPrincipal;
 import com.application.cabapp.security.JwtService;
+import com.application.cabapp.security.LoginProtection;
 import com.application.cabapp.security.PasswordService;
 import com.application.cabapp.security.Role;
 
@@ -23,11 +24,14 @@ public class DriverService {
     private final DriverRepository driverRepository;
     private final PasswordService passwordService;
     private final JwtService jwtService;
+    private final LoginProtection loginProtection;
 
-    public DriverService(DriverRepository driverRepository, PasswordService passwordService, JwtService jwtService) {
+    public DriverService(DriverRepository driverRepository, PasswordService passwordService, JwtService jwtService,
+            LoginProtection loginProtection) {
         this.driverRepository = driverRepository;
         this.passwordService = passwordService;
         this.jwtService = jwtService;
+        this.loginProtection = loginProtection;
     }
 
     @Transactional
@@ -48,9 +52,15 @@ public class DriverService {
 
     @Transactional
     public AuthResponse<DriverResponse> login(LoginRequest request) {
+        loginProtection.checkAllowed(Role.DRIVER, request.username());
         Driver driver = driverRepository.findByUsername(request.username())
                 .filter(d -> passwordService.matches(request.password(), d.getPassword()))
-                .orElseThrow(() -> ApiException.unauthorized("Invalid username or password"));
+                .orElse(null);
+        if (driver == null) {
+            loginProtection.recordFailure(Role.DRIVER, request.username());
+            throw ApiException.unauthorized("Invalid username or password");
+        }
+        loginProtection.recordSuccess(Role.DRIVER, request.username());
 
         if (passwordService.needsRehash(driver.getPassword())) {
             // Upgrade a legacy plaintext password to a BCrypt hash.

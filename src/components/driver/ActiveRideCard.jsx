@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { DRIVER_CANCELLABLE_STATUSES, LIMITS, RIDE_STATUS } from '../../constants';
+import { getErrorMessage } from '../../utils/errors';
 
 /**
  * The driver's current ride and the next action for its status.
@@ -14,8 +15,8 @@ export default function ActiveRideCard({ ride, onSetStatus, onStart, onComplete,
     try {
       await onStart(otp);
       setOtp('');
-    } catch {
-      setErr('Invalid OTP');
+    } catch (e) {
+      setErr(getErrorMessage(e, 'Invalid OTP'));
     }
   };
 

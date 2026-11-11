@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,7 @@ import com.application.cabapp.model.VehicleType;
 import com.application.cabapp.repository.DriverRepository;
 import com.application.cabapp.repository.RideRepository;
 import com.application.cabapp.repository.UserRepository;
+import com.application.cabapp.security.AttemptLimiter;
 import com.application.cabapp.security.AuthPrincipal;
 import com.application.cabapp.security.Role;
 
@@ -60,14 +62,17 @@ public class RideService {
     private final UserRepository userRepository;
     private final RideAccessService rideAccess;
     private final DriverService driverService;
+    private final AttemptLimiter otpAttemptLimiter;
 
     public RideService(RideRepository rideRepository, DriverRepository driverRepository,
-                       UserRepository userRepository, RideAccessService rideAccess, DriverService driverService) {
+                       UserRepository userRepository, RideAccessService rideAccess, DriverService driverService,
+                       @Qualifier("otpAttemptLimiter") AttemptLimiter otpAttemptLimiter) {
         this.rideRepository = rideRepository;
         this.driverRepository = driverRepository;
         this.userRepository = userRepository;
         this.rideAccess = rideAccess;
         this.driverService = driverService;
+        this.otpAttemptLimiter = otpAttemptLimiter;
     }
 
     // ---------- Rider actions ----------
@@ -168,9 +173,15 @@ public class RideService {
     @Transactional
     public RideResponse start(AuthPrincipal principal, Long rideId, StartRideRequest request) {
         Ride ride = rideAccess.getForAssignedDriver(principal, rideId);
+        String limiterKey = "ride:" + rideId;
+        if (otpAttemptLimiter.isBlocked(limiterKey)) {
+            throw ApiException.tooManyRequests("Too many wrong OTPs. Please wait a few minutes and try again.");
+        }
         if (ride.getStatus() != RideStatus.ARRIVED || !request.otp().equals(ride.getOtp())) {
+            otpAttemptLimiter.recordFailure(limiterKey);
             throw ApiException.badRequest("Invalid OTP");
         }
+        otpAttemptLimiter.reset(limiterKey);
         ride.setStatus(RideStatus.STARTED);
         return RideResponse.forDriver(ride);
     }

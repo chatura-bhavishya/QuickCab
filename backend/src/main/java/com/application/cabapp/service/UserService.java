@@ -13,6 +13,7 @@ import com.application.cabapp.model.User;
 import com.application.cabapp.repository.UserRepository;
 import com.application.cabapp.security.AuthPrincipal;
 import com.application.cabapp.security.JwtService;
+import com.application.cabapp.security.LoginProtection;
 import com.application.cabapp.security.PasswordService;
 import com.application.cabapp.security.Role;
 
@@ -23,11 +24,14 @@ public class UserService {
     private final UserRepository userRepository;
     private final PasswordService passwordService;
     private final JwtService jwtService;
+    private final LoginProtection loginProtection;
 
-    public UserService(UserRepository userRepository, PasswordService passwordService, JwtService jwtService) {
+    public UserService(UserRepository userRepository, PasswordService passwordService, JwtService jwtService,
+            LoginProtection loginProtection) {
         this.userRepository = userRepository;
         this.passwordService = passwordService;
         this.jwtService = jwtService;
+        this.loginProtection = loginProtection;
     }
 
     @Transactional
@@ -45,9 +49,15 @@ public class UserService {
 
     @Transactional
     public AuthResponse<UserResponse> login(LoginRequest request) {
+        loginProtection.checkAllowed(Role.USER, request.username());
         User user = userRepository.findByUsername(request.username())
                 .filter(u -> passwordService.matches(request.password(), u.getPassword()))
-                .orElseThrow(() -> ApiException.unauthorized("Invalid username or password"));
+                .orElse(null);
+        if (user == null) {
+            loginProtection.recordFailure(Role.USER, request.username());
+            throw ApiException.unauthorized("Invalid username or password");
+        }
+        loginProtection.recordSuccess(Role.USER, request.username());
 
         if (passwordService.needsRehash(user.getPassword())) {
             // Upgrade a legacy plaintext password to a BCrypt hash.

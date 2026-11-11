@@ -7,6 +7,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -24,8 +26,10 @@ import com.application.cabapp.dto.request.UserUpdateRequest;
 import com.application.cabapp.exception.ApiException;
 import com.application.cabapp.model.User;
 import com.application.cabapp.repository.UserRepository;
+import com.application.cabapp.security.AttemptLimiter;
 import com.application.cabapp.security.AuthPrincipal;
 import com.application.cabapp.security.JwtService;
+import com.application.cabapp.security.LoginProtection;
 import com.application.cabapp.security.PasswordService;
 import com.application.cabapp.security.Role;
 
@@ -35,6 +39,8 @@ class UserServiceTest {
     @Mock UserRepository userRepository;
     @Mock JwtService jwtService;
     @Spy PasswordService passwordService = new PasswordService();
+    @Spy LoginProtection loginProtection =
+            new LoginProtection(new AttemptLimiter(3, Duration.ofMinutes(15), Clock.systemUTC()));
     @InjectMocks UserService userService;
 
     private static User storedUser(String password) {
@@ -93,6 +99,21 @@ class UserServiceTest {
                 .isInstanceOf(ApiException.class).hasMessage("Invalid username or password");
         assertThatThrownBy(() -> userService.login(new LoginRequest("ghost", "secret12")))
                 .isInstanceOf(ApiException.class).hasMessage("Invalid username or password");
+    }
+
+    @Test
+    void tooManyWrongPasswordsLockTheAccountForAWhile() {
+        User existing = storedUser(passwordService.hash("secret12"));
+        when(userRepository.findByUsername("rider1")).thenReturn(Optional.of(existing));
+
+        for (int i = 0; i < 3; i++) {
+            assertThatThrownBy(() -> userService.login(new LoginRequest("rider1", "wrong")))
+                    .hasMessage("Invalid username or password");
+        }
+        // Even the right password is refused until the window passes.
+        assertThatThrownBy(() -> userService.login(new LoginRequest("RIDER1", "secret12")))
+                .isInstanceOf(ApiException.class)
+                .extracting(e -> ((ApiException) e).getStatus()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
     }
 
     @Test
