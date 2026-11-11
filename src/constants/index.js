@@ -45,7 +45,13 @@ export const RIDE_STATUS = {
   CANCELLED_BY_DRIVER: 'CANCELLED_BY_DRIVER'
 };
 
-// Input limits (must match backend InputValidator.java).
+// Status groups used to decide what each screen shows.
+export const OTP_VISIBLE_STATUSES = [RIDE_STATUS.ACCEPTED, RIDE_STATUS.ON_THE_WAY, RIDE_STATUS.ARRIVED];
+export const RIDER_CANCELLABLE_STATUSES = [RIDE_STATUS.PENDING, ...OTP_VISIBLE_STATUSES];
+export const DRIVER_CANCELLABLE_STATUSES = [RIDE_STATUS.ACCEPTED, RIDE_STATUS.ON_THE_WAY, RIDE_STATUS.ARRIVED];
+export const DRIVER_ACTIVE_STATUSES = [...DRIVER_CANCELLABLE_STATUSES, RIDE_STATUS.STARTED];
+
+// Input limits (must match backend ValidationRules.java).
 export const LIMITS = {
   USERNAME_MIN: 3,
   USERNAME_MAX: 30,

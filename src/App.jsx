@@ -1,5 +1,7 @@
-import { Routes, Route, Link, useNavigate } from 'react-router-dom';
+import { Routes, Route } from 'react-router-dom';
 
+import Navbar from './components/Navbar.jsx';
+import RequireAuth from './components/RequireAuth.jsx';
 import Home from './pages/Home.jsx';
 import UserLogin from './pages/UserLogin.jsx';
 import UserRegister from './pages/UserRegister.jsx';
@@ -10,50 +12,6 @@ import RideStatus from './pages/RideStatus.jsx';
 import DriverDashboard from './pages/DriverDashboard.jsx';
 import History from './pages/History.jsx';
 import Profile from './pages/Profile.jsx';
-import RequireAuth from './components/RequireAuth.jsx';
-import { getDriver, getUser } from './services/session';
-import { logout as endSession } from './services/authService';
-
-function Navbar() {
-  const navigate = useNavigate();
-  const user = getUser();
-  const driver = getDriver();
-
-  const logout = () => {
-    endSession();
-    navigate('/');
-  };
-
-  return (
-    <nav className="navbar">
-      <Link to="/" className="logo">Quick<span>Cab</span></Link>
-      <div className="links">
-        {!user && !driver && (
-          <>
-            <Link to="/user/login">User Login</Link>
-            <Link to="/driver/login">Driver Login</Link>
-          </>
-        )}
-        {user && (
-          <>
-            <Link to="/book">Book</Link>
-            <Link to="/history">History</Link>
-            <Link to="/profile">Profile</Link>
-            <button onClick={logout}>Logout</button>
-          </>
-        )}
-        {driver && (
-          <>
-            <Link to="/driver/dashboard">Dashboard</Link>
-            <Link to="/history">History</Link>
-            <Link to="/profile">Profile</Link>
-            <button onClick={logout}>Logout</button>
-          </>
-        )}
-      </div>
-    </nav>
-  );
-}
 
 export default function App() {
   return (

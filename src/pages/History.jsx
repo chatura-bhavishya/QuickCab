@@ -1,19 +1,15 @@
 import { useEffect, useState } from 'react';
 import { getMyRides } from '../services/rideService';
-import { getDriver, getUser } from '../services/session';
 
 export default function History() {
-  const [user] = useState(getUser);
-  const [driver] = useState(getDriver);
   const [rides, setRides] = useState([]);
   const [err, setErr] = useState('');
 
   useEffect(() => {
-    if (!user && !driver) return;
     getMyRides()
       .then(setRides)
       .catch(() => setErr('Could not load your ride history. Please try again.'));
-  }, [user, driver]);
+  }, []);
 
   return (
     <div className="card">
