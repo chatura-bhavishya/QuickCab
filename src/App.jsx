@@ -1,4 +1,3 @@
-import React from 'react';
 import { Routes, Route, Link, useNavigate } from 'react-router-dom';
 
 import Home from './pages/Home.jsx';
@@ -11,14 +10,16 @@ import RideStatus from './pages/RideStatus.jsx';
 import DriverDashboard from './pages/DriverDashboard.jsx';
 import History from './pages/History.jsx';
 import Profile from './pages/Profile.jsx';
+import RequireAuth from './components/RequireAuth.jsx';
+import { clearSession, getDriver, getUser } from './auth/session';
 
 function Navbar() {
   const navigate = useNavigate();
-  const user = JSON.parse(localStorage.getItem('user') || 'null');
-  const driver = JSON.parse(localStorage.getItem('driver') || 'null');
+  const user = getUser();
+  const driver = getDriver();
 
   const logout = () => {
-    localStorage.clear();
+    clearSession();
     navigate('/');
   };
 
@@ -64,11 +65,11 @@ export default function App() {
           <Route path="/user/register" element={<UserRegister />} />
           <Route path="/driver/login" element={<DriverLogin />} />
           <Route path="/driver/register" element={<DriverRegister />} />
-          <Route path="/book" element={<BookRide />} />
-          <Route path="/ride/:id" element={<RideStatus />} />
-          <Route path="/driver/dashboard" element={<DriverDashboard />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/profile" element={<Profile />} />
+          <Route path="/book" element={<RequireAuth role="user"><BookRide /></RequireAuth>} />
+          <Route path="/ride/:id" element={<RequireAuth role="user"><RideStatus /></RequireAuth>} />
+          <Route path="/driver/dashboard" element={<RequireAuth role="driver"><DriverDashboard /></RequireAuth>} />
+          <Route path="/history" element={<RequireAuth role="any"><History /></RequireAuth>} />
+          <Route path="/profile" element={<RequireAuth role="any"><Profile /></RequireAuth>} />
         </Routes>
       </div>
     </>

@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../api/api';
+import { DEFAULT_VEHICLE_TYPE, LIMITS, REDIRECT_DELAY_MS, VEHICLES } from '../constants';
+import { getErrorMessage } from '../utils/errors';
+import {
+  firstError, validateContact, validatePassword, validateUsername,
+  validateVehicleNumber, validateVehicleType
+} from '../utils/validation';
 
 export default function DriverRegister() {
   const [form, setForm] = useState({
-    username: '', password: '', contact: '', vehicleType: 'car', vehicleNumber: ''
+    username: '', password: '', contact: '', vehicleType: DEFAULT_VEHICLE_TYPE, vehicleNumber: ''
   });
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
@@ -15,12 +21,21 @@ export default function DriverRegister() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErr(''); setMsg('');
+    const validationError = firstError(
+      validateUsername(form.username),
+      validatePassword(form.password),
+      validateContact(form.contact),
+      validateVehicleType(form.vehicleType),
+      validateVehicleNumber(form.vehicleNumber)
+    );
+    if (validationError) { setErr(validationError); return; }
+
     try {
       await api.post('/drivers/register', form);
       setMsg('Registered! Redirecting to login...');
-      setTimeout(() => navigate('/driver/login'), 1200);
+      setTimeout(() => navigate('/driver/login'), REDIRECT_DELAY_MS);
     } catch (e) {
-      setErr(e.response?.data || 'Registration failed');
+      setErr(getErrorMessage(e, 'Registration failed'));
     }
   };
 
@@ -29,19 +44,21 @@ export default function DriverRegister() {
       <h2>Driver Register</h2>
       <form onSubmit={handleSubmit}>
         <div className="form-group"><label>Username</label>
-          <input name="username" value={form.username} onChange={handleChange} required /></div>
+          <input name="username" value={form.username} onChange={handleChange}
+            maxLength={LIMITS.USERNAME_MAX} autoComplete="username" required /></div>
         <div className="form-group"><label>Password</label>
-          <input name="password" type="password" value={form.password} onChange={handleChange} required /></div>
+          <input name="password" type="password" value={form.password} onChange={handleChange}
+            maxLength={LIMITS.PASSWORD_MAX} autoComplete="new-password" required /></div>
         <div className="form-group"><label>Contact</label>
-          <input name="contact" value={form.contact} onChange={handleChange} required /></div>
+          <input name="contact" type="tel" value={form.contact} onChange={handleChange}
+            maxLength={LIMITS.CONTACT_MAX} autoComplete="tel" required /></div>
         <div className="form-group"><label>Vehicle Type</label>
           <select name="vehicleType" value={form.vehicleType} onChange={handleChange}>
-            <option value="car">Car</option>
-            <option value="bike">Bike</option>
-            <option value="auto">Auto</option>
+            {VEHICLES.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
           </select></div>
         <div className="form-group"><label>Vehicle Number</label>
-          <input name="vehicleNumber" value={form.vehicleNumber} onChange={handleChange} required /></div>
+          <input name="vehicleNumber" value={form.vehicleNumber} onChange={handleChange}
+            maxLength={LIMITS.VEHICLE_NUMBER_MAX} required /></div>
         <button className="btn btn-block">Register</button>
         {err && <div className="error">{err}</div>}
         {msg && <div className="success">{msg}</div>}

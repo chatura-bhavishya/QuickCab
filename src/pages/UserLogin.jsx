@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../api/api';
+import { saveUser } from '../auth/session';
+import { LIMITS } from '../constants';
 
 export default function UserLogin() {
   const [form, setForm] = useState({ username: '', password: '' });
@@ -14,7 +16,7 @@ export default function UserLogin() {
     setErr('');
     try {
       const res = await api.post('/users/login', form);
-      localStorage.setItem('user', JSON.stringify(res.data));
+      saveUser(res.data);
       navigate('/book');
     } catch {
       setErr('Invalid username or password');
@@ -27,11 +29,13 @@ export default function UserLogin() {
       <form onSubmit={handleSubmit}>
         <div className="form-group">
           <label>Username</label>
-          <input name="username" value={form.username} onChange={handleChange} required />
+          <input name="username" value={form.username} onChange={handleChange}
+            maxLength={LIMITS.USERNAME_MAX} autoComplete="username" required />
         </div>
         <div className="form-group">
           <label>Password</label>
-          <input name="password" type="password" value={form.password} onChange={handleChange} required />
+          <input name="password" type="password" value={form.password} onChange={handleChange}
+            maxLength={LIMITS.PASSWORD_MAX} autoComplete="current-password" required />
         </div>
         <button className="btn btn-block">Login</button>
         {err && <div className="error">{err}</div>}

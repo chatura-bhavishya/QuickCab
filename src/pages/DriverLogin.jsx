@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../api/api';
+import { saveDriver } from '../auth/session';
+import { LIMITS } from '../constants';
 
 export default function DriverLogin() {
   const [form, setForm] = useState({ username: '', password: '' });
@@ -14,7 +16,7 @@ export default function DriverLogin() {
     setErr('');
     try {
       const res = await api.post('/drivers/login', form);
-      localStorage.setItem('driver', JSON.stringify(res.data));
+      saveDriver(res.data);
       navigate('/driver/dashboard');
     } catch {
       setErr('Invalid username or password');
@@ -26,9 +28,11 @@ export default function DriverLogin() {
       <h2>Driver Login</h2>
       <form onSubmit={handleSubmit}>
         <div className="form-group"><label>Username</label>
-          <input name="username" value={form.username} onChange={handleChange} required /></div>
+          <input name="username" value={form.username} onChange={handleChange}
+            maxLength={LIMITS.USERNAME_MAX} autoComplete="username" required /></div>
         <div className="form-group"><label>Password</label>
-          <input name="password" type="password" value={form.password} onChange={handleChange} required /></div>
+          <input name="password" type="password" value={form.password} onChange={handleChange}
+            maxLength={LIMITS.PASSWORD_MAX} autoComplete="current-password" required /></div>
         <button className="btn btn-block">Login</button>
         {err && <div className="error">{err}</div>}
       </form>

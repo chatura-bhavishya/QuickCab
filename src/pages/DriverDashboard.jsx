@@ -1,13 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../api/api';
+import { getDriver } from '../auth/session';
+import { LIMITS, POLL_INTERVAL_MS, RIDE_STATUS } from '../constants';
+import { getErrorMessage } from '../utils/errors';
+import { validateChatMessage } from '../utils/validation';
 
 // Statuses during which the driver can still cancel the active ride.
-const CANCELLABLE_STATUSES = ['ACCEPTED', 'ON_THE_WAY', 'ARRIVED'];
+const CANCELLABLE_STATUSES = [RIDE_STATUS.ACCEPTED, RIDE_STATUS.ON_THE_WAY, RIDE_STATUS.ARRIVED];
 // Statuses we treat as an "active" ride (still in progress).
-const ACTIVE_STATUSES = ['ACCEPTED', 'ON_THE_WAY', 'ARRIVED', 'STARTED'];
+const ACTIVE_STATUSES = [RIDE_STATUS.ACCEPTED, RIDE_STATUS.ON_THE_WAY, RIDE_STATUS.ARRIVED, RIDE_STATUS.STARTED];
 
 export default function DriverDashboard() {
-  const driver = JSON.parse(localStorage.getItem('driver') || 'null');
+  const [driver] = useState(getDriver);
   const [pending, setPending] = useState([]);
   const [activeRide, setActiveRide] = useState(null);
   const [otp, setOtp] = useState('');
@@ -21,50 +25,61 @@ export default function DriverDashboard() {
 
   const refresh = async () => {
     if (!driver) return;
-    const p = await api.get(`/rides/pending/${driver.vehicleType}`);
-    setPending(p.data);
-    const mine = await api.get(`/rides/driver/${driver.id}`);
-    const active = mine.data.find(r => ACTIVE_STATUSES.includes(r.status));
+    try {
+      const p = await api.get(`/rides/pending/${driver.vehicleType}`);
+      setPending(p.data);
+      const mine = await api.get(`/rides/driver/${driver.id}`);
+      const active = mine.data.find(r => ACTIVE_STATUSES.includes(r.status));
 
-    // Detect a ride that was active last tick but is no longer — most likely
-    // because the user cancelled it. Surface that to the driver.
-    if (lastActiveId && (!active || active.id !== lastActiveId)) {
-      const prev = mine.data.find(r => r.id === lastActiveId);
-      if (prev && prev.status === 'CANCELLED_BY_USER') {
-        setNotice('The user cancelled the ride.');
+      // Detect a ride that was active last tick but is no longer — most likely
+      // because the user cancelled it. Surface that to the driver.
+      if (lastActiveId && (!active || active.id !== lastActiveId)) {
+        const prev = mine.data.find(r => r.id === lastActiveId);
+        if (prev && prev.status === RIDE_STATUS.CANCELLED_BY_USER) {
+          setNotice('The user cancelled the ride.');
+        }
       }
-    }
-    setActiveRide(active || null);
-    setLastActiveId(active ? active.id : null);
+      setActiveRide(active || null);
+      setLastActiveId(active ? active.id : null);
 
-    if (active) {
-      const c = await api.get(`/chat/${active.id}`);
-      setChat(c.data);
-    } else {
-      setChat([]);
+      if (active) {
+        const c = await api.get(`/chat/${active.id}`);
+        setChat(c.data);
+      } else {
+        setChat([]);
+      }
+    } catch {
+      // Transient network/API error: keep the current view, retry on next poll.
     }
   };
 
   useEffect(() => {
     refresh();
-    const t = setInterval(refresh, 3000);
+    const t = setInterval(refresh, POLL_INTERVAL_MS);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lastActiveId]);
 
-  const accept = async (rideId) => {
+  /** Runs a ride action, showing a friendly notice if the API rejects it. */
+  const runAction = async (action, failureMessage) => {
+    try {
+      await action();
+    } catch (e) {
+      setNotice(getErrorMessage(e, failureMessage));
+    }
+    refresh();
+  };
+
+  const accept = (rideId) => runAction(async () => {
     await api.post(`/rides/${rideId}/accept/${driver.id}`);
     setNotice('');
-    refresh();
-  };
-  const deny = async (rideId) => {
-    await api.post(`/rides/${rideId}/deny`);
-    refresh();
-  };
-  const setStatus = async (status) => {
-    await api.post(`/rides/${activeRide.id}/status`, { status });
-    refresh();
-  };
+  }, 'This ride is no longer available.');
+  const deny = (rideId) => runAction(
+    () => api.post(`/rides/${rideId}/deny`),
+    'Could not deny the ride. Please try again.');
+  const setStatus = (status) => runAction(
+    () => api.post(`/rides/${activeRide.id}/status`, { status }),
+    'Could not update the ride status. Please try again.');
   const startRide = async () => {
     setErr('');
     try {
@@ -86,14 +101,17 @@ export default function DriverDashboard() {
       setErr('Could not cancel — the ride may have already started.');
     }
   };
-  const completePayment = async () => {
-    await api.post(`/rides/${activeRide.id}/pay`);
-    refresh();
-  };
+  const completePayment = () => runAction(
+    () => api.post(`/rides/${activeRide.id}/pay`),
+    'Could not complete the ride. Please try again.');
   const sendMsg = async () => {
     if (!msg.trim()) return;
-    await api.post('/chat/send', { rideId: activeRide.id, sender: 'DRIVER', message: msg });
-    setMsg(''); refresh();
+    const validationError = validateChatMessage(msg);
+    if (validationError) { setNotice(validationError); return; }
+    await runAction(async () => {
+      await api.post('/chat/send', { rideId: activeRide.id, sender: 'DRIVER', message: msg });
+      setMsg('');
+    }, 'Message could not be sent.');
   };
 
   if (!driver) return <div className="card">Please login as driver.</div>;
@@ -139,21 +157,22 @@ export default function DriverDashboard() {
             )}
             <p><b>Status:</b> <span className="badge">{activeRide.status}</span></p>
 
-            {activeRide.status === 'ACCEPTED' && (
-              <button className="btn" onClick={() => setStatus('ON_THE_WAY')}>I'm On The Way</button>
+            {activeRide.status === RIDE_STATUS.ACCEPTED && (
+              <button className="btn" onClick={() => setStatus(RIDE_STATUS.ON_THE_WAY)}>I'm On The Way</button>
             )}
-            {activeRide.status === 'ON_THE_WAY' && (
-              <button className="btn" onClick={() => setStatus('ARRIVED')}>Arrived at Pickup</button>
+            {activeRide.status === RIDE_STATUS.ON_THE_WAY && (
+              <button className="btn" onClick={() => setStatus(RIDE_STATUS.ARRIVED)}>Arrived at Pickup</button>
             )}
-            {activeRide.status === 'ARRIVED' && (
+            {activeRide.status === RIDE_STATUS.ARRIVED && (
               <div style={{ marginTop: 10 }}>
                 <label>Enter OTP from user</label>
-                <input value={otp} onChange={e => setOtp(e.target.value)} style={{ width: 120, margin: '0 8px' }} />
+                <input value={otp} onChange={e => setOtp(e.target.value)} style={{ width: 120, margin: '0 8px' }}
+                  inputMode="numeric" maxLength={LIMITS.OTP_LENGTH} />
                 <button className="btn" onClick={startRide}>Start Ride</button>
                 {err && <p style={{ color: '#b00' }}>{err}</p>}
               </div>
             )}
-            {activeRide.status === 'STARTED' && (
+            {activeRide.status === RIDE_STATUS.STARTED && (
               <button className="btn btn-success" onClick={completePayment}>Payment Received → Complete Ride</button>
             )}
 
@@ -175,7 +194,8 @@ export default function DriverDashboard() {
               {chat.length === 0 && <p className="muted">No messages yet.</p>}
             </div>
             <div className="chat-input">
-              <input value={msg} onChange={e => setMsg(e.target.value)} placeholder="Type a message..." />
+              <input value={msg} onChange={e => setMsg(e.target.value)} placeholder="Type a message..."
+                maxLength={LIMITS.CHAT_MESSAGE_MAX} />
               <button className="btn" onClick={sendMsg}>Send</button>
             </div>
           </div>
