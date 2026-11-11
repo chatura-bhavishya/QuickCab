@@ -28,6 +28,10 @@ export const DEFAULT_VEHICLE_TYPE = 'car';
 /** How often ride status / chat / pending requests are refreshed. */
 export const POLL_INTERVAL_MS = 3000;
 
+/** Slower safety-net polling while the live WebSocket connection is up. */
+export const LIVE_FALLBACK_POLL_MS = 30000;
+export const LIVE_RECONNECT_DELAY_MS = 5000;
+
 /** Delay before redirecting to login after a successful registration. */
 export const REDIRECT_DELAY_MS = 1200;
 

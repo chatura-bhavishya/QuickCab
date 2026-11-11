@@ -5,8 +5,9 @@ import RideRouteCard from '../components/map/RideRouteCard';
 import DriverDetailsCard from '../components/ride/DriverDetailsCard';
 import RatingCard from '../components/ride/RatingCard';
 import {
-  OTP_VISIBLE_STATUSES, POLL_INTERVAL_MS, RIDE_STATUS, RIDER_CANCELLABLE_STATUSES, ROLES
+  LIVE_FALLBACK_POLL_MS, OTP_VISIBLE_STATUSES, POLL_INTERVAL_MS, RIDE_STATUS, RIDER_CANCELLABLE_STATUSES, ROLES
 } from '../constants';
+import { useLiveUpdates } from '../hooks/useLiveUpdates';
 import { usePolling } from '../hooks/usePolling';
 import { getMessages, sendMessage } from '../services/chatService';
 import { cancelRide as cancelRideRequest, getRideDetails, rateDriver } from '../services/rideService';
@@ -39,7 +40,12 @@ export default function RideStatus() {
     }
   }, [id]);
 
-  usePolling(() => { fetchRide(); fetchChat(); }, POLL_INTERVAL_MS);
+  // Live updates when the socket is up; polling stays on as a slower safety net.
+  const live = useLiveUpdates([`/topic/rides/${id}`], (event) => {
+    if (event.type !== 'CHAT') fetchRide();
+    fetchChat();
+  });
+  usePolling(() => { fetchRide(); fetchChat(); }, live ? LIVE_FALLBACK_POLL_MS : POLL_INTERVAL_MS);
 
   const handleSend = async (text) => {
     await sendMessage(id, text);

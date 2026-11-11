@@ -3,7 +3,8 @@ import ChatPanel from '../components/ChatPanel';
 import RideRouteCard from '../components/map/RideRouteCard';
 import ActiveRideCard from '../components/driver/ActiveRideCard';
 import PendingRideList from '../components/driver/PendingRideList';
-import { DRIVER_ACTIVE_STATUSES, POLL_INTERVAL_MS, RIDE_STATUS, ROLES } from '../constants';
+import { DRIVER_ACTIVE_STATUSES, LIVE_FALLBACK_POLL_MS, POLL_INTERVAL_MS, RIDE_STATUS, ROLES } from '../constants';
+import { useLiveUpdates } from '../hooks/useLiveUpdates';
 import { usePolling } from '../hooks/usePolling';
 import { getMessages, sendMessage } from '../services/chatService';
 import {
@@ -50,7 +51,12 @@ export default function DriverDashboard() {
     }
   };
 
-  usePolling(refresh, POLL_INTERVAL_MS, !!driver);
+  // New requests for my vehicle type, plus changes to the ride I'm on.
+  const live = useLiveUpdates([
+    driver && `/topic/pending/${driver.vehicleType}`,
+    activeRide && `/topic/rides/${activeRide.id}`
+  ], refresh);
+  usePolling(refresh, live ? LIVE_FALLBACK_POLL_MS : POLL_INTERVAL_MS, !!driver);
 
   /** Runs a ride action, showing a friendly notice if the API rejects it. */
   const runAction = async (action, failureMessage) => {

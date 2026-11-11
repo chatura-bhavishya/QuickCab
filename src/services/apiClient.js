@@ -5,10 +5,11 @@ import { LOGIN_PATHS } from '../constants';
 import { clearSession, getSession } from './session';
 
 const DEFAULT_API_BASE_URL = 'http://localhost:8080/api';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL;
 const HTTP_UNAUTHORIZED = 401;
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE_URL,
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' }
 });
 
